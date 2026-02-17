@@ -17,6 +17,32 @@ end
 
 
 -----------------------------------------------------------------------------------------------
+-- 第三方依赖目标: pugixml
+target("duilib_tp_pugixml")
+    set_kind("static")
+
+    add_files("Utils/pugixml/pugixml.cpp")
+    add_includedirs(".", {public = true})
+
+    GeneralConfig()
+
+    if has_config("unicode", "true") then
+        add_defines("PUGIXML_WCHAR_MODE", {public = true})
+    end
+
+-----------------------------------------------------------------------------------------------
+-- 第三方依赖目标: unzip
+if is_plat("windows") then
+target("duilib_tp_unzip")
+    set_kind("static")
+
+    add_files("Utils/unzip.cpp")
+    add_includedirs(".", {public = true})
+
+    GeneralConfig()
+end
+
+-----------------------------------------------------------------------------------------------
 -- 定义工程目标
 target("DuiLib")
     -- 设置目标编译类型 phony,binary,static,shared,object,headeronly
@@ -29,7 +55,12 @@ target("DuiLib")
 	set_basename(target_file_name)
 		
     -- 添加源代码文件
-    add_files("**.cpp")
+    add_files("*.cpp")
+    add_files("Core/*.cpp")
+    add_files("Control/*.cpp")
+    add_files("Layout/*.cpp")
+    add_files("Render/*.cpp")
+    add_files("Utils/*.cpp")
 
     -- 从前面的源代码文件列表中删除指定文件
     remove_files("Utils/unzip.cpp")
@@ -44,7 +75,10 @@ target("DuiLib")
 	GeneralConfig()
 
 	--添加子工程目标依赖
-	--
+    add_deps("duilib_tp_pugixml", {public = true})
+    if is_plat("windows") then
+        add_deps("duilib_tp_unzip", {public = true})
+    end
 	
 	-- 添加规则
 	--

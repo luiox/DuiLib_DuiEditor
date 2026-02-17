@@ -9,7 +9,7 @@
 #pragma once
 
 #ifdef __GNUC__
-// 怎么都没找到min，max的头文件-_-
+// 锟斤拷么锟斤拷没锟揭碉拷min锟斤拷max锟斤拷头锟侥硷拷-_-
 #ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
@@ -79,10 +79,6 @@
 
 //////////////////////////////////////////////////////////////////////////
 
-#define PUGIXML_HEADER_ONLY
-#ifdef _UNICODE
-#define PUGIXML_WCHAR_MODE
-#endif
 #include "Utils/pugixml/pugixml.hpp"
 
 
@@ -93,12 +89,12 @@
 #ifdef DUILIB_WIN32
 namespace DuiLib
 {
-//GdiPlus初始化
+//GdiPlus锟斤拷始锟斤拷
 #define GDIPLUS_STARTUP_INSTANCE GdiplusStartup::Instance()
 class GdiplusStartup
 {
 public:
-	//创建任何Gdiplus对象之前都要先调用一下
+	//锟斤拷锟斤拷锟轿猴拷Gdiplus锟斤拷锟斤拷之前锟斤拷要锟饺碉拷锟斤拷一锟斤拷
 	static void Instance()
 	{
 		static GdiplusStartup obj;

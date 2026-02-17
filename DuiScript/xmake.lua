@@ -1,30 +1,3 @@
--- 定义一个名为 asm 的规则 
-rule("asm") 
-    -- 设置规则的扩展名为.asm 
-    set_extensions(".asm") 
- 
-    -- 定义构建命令文件时的回调函数 
-    on_buildcmd_file(function (target, batchcmds, sourcefile) 
-        -- 获取目标文件路径，这里将.asm 文件编译后生成同名的.o 文件 
-        local objectfile = target:objectfile(sourcefile) 
- 
-        -- 根据目标平台获取对应的汇编器命令 
-        local as = target:tool("as") or "as" 
- 
-        -- 添加汇编命令到命令列表中 
-        batchcmds:add({ 
-            cmd = "", 
-            commands = { 
-                -- 构建汇编命令，使用汇编器将.asm 文件编译成.o 文件 
-                "$(as) -o ".. objectfile.. " ".. sourcefile 
-            }, 
-            envs = { 
-                -- 设置汇编器环境变量 
-                as = as 
-            } 
-        }) 
-    end) 
-
 -- Add target
 target("DuiScript")
     -- 设置目标编译类型 phony,binary,static,shared,object,headeronly
@@ -36,8 +9,8 @@ target("DuiScript")
 	-- 设置目标文件名
 	set_basename(target_file_name)
 	
-	-- 添加规则
-    --add_rules("asm")
+    -- 添加规则
+    --
 
     -- 添加源代码文件
     add_files("*.cpp")
