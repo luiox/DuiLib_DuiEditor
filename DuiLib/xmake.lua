@@ -33,9 +33,19 @@ target("DuiLib")
 
     -- 从前面的源代码文件列表中删除指定文件
     remove_files("Utils/unzip.cpp")
+
+    -- 在 Windows 上排除 SDL/GTK/Cairo 等非 Win32 平台的源文件
+    if is_plat("windows") then
+        remove_files("**/*Sdl*.cpp", "**/*SDL*.cpp")
+        remove_files("**/*Gtk*.cpp", "**/*GTK*.cpp")
+        remove_files("**/*Cairo*.cpp")
+    end
         
     -- 添加头文件搜索目录
     add_includedirs(".", {public = true})
+    if is_plat("windows") then
+        add_includedirs("$(projectdir)/3rd", {public = true})
+    end
 
     -- 设置 C++ 预编译头文件
     set_pcxxheader("./StdAfx.h") 

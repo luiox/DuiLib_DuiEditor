@@ -48,7 +48,7 @@ using namespace DuiLib;
 #define PUGIXML_WCHAR_MODE
 #endif
 #define PUGIXML_HEADER_ONLY
-#include "pugixml/pugixml.hpp"
+#include "../3rd/pugixml/pugixml.hpp"
 using namespace pugi;
 
 extern DuiLib::CDuiString g_strDuiPluginsPath;

@@ -294,11 +294,11 @@ BOOL CImageEditor::PreTranslateMessage(MSG* pMsg)
 /*
 #define strtoll _strtoi64
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "nanosvg/src/stb_image_write.h"
+#include "stb/stb_image_write.h"
 #define NANOSVG_IMPLEMENTATION
-#include "nanosvg/src/nanosvg.h"
+#include "nanosvg/nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "nanosvg/src/nanosvgrast.h"
+#include "nanosvg/nanosvgrast.h"
 
 BOOL CImageEditor::svg_2_cximage(CxImage &cximg, LPCTSTR strPathName)
 {

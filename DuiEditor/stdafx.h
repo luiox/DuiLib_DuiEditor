@@ -52,6 +52,11 @@
 //#ifdef _UNICODE
 //#define PUGIXML_WCHAR_MODE
 //#endif
+
+#ifdef _UNICODE
+#define PUGIXML_WCHAR_MODE
+#endif
+#define PUGIXML_HEADER_ONLY
  
 #ifdef PUGIXML_WCHAR_MODE
 	#define XTEXT(x) L ## x
@@ -75,7 +80,7 @@ using namespace DuiLib;
 #include "../3rd/scintilla/include/Scintilla.h"
 #include "../3rd/scintilla/SciWnd.h"
 
-#include "pugixml/pugixml.hpp"
+#include "../3rd/pugixml/pugixml.hpp"
 using namespace pugi;
 #define XML_PARSER_OPTIONS pugi::parse_full//parse_default|parse_declaration|parse_comments
 

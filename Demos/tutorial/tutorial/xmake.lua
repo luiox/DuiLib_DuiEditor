@@ -24,7 +24,8 @@ target("tutorial")
 	
 	-- 添加头文件搜索目录
     add_includedirs(".", {public = true})
-	
+    add_includedirs("$(projectdir)/3rd", {public = true})
+
     -- 设置 C++ 预编译头文件
     set_pcxxheader("./StdAfx.h") 
 	

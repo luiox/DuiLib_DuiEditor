@@ -51,6 +51,13 @@ function setup_gtk_includedirs()
     add_includedirs(base_dir.. "/atk-1.0")
 end
 
+-- 公共的第三方库包含目录配置
+function setup_3rd_includedirs()
+    if is_plat("windows") then
+        add_includedirs("$(projectdir)/3rd", {public = true})
+    end
+end
+
 function GeneralConfig()
 	if is_plat("windows") then
         add_defines("WIN32","_WIN32", "WINDOWS")  
