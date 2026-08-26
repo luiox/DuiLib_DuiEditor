@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: xmake-io/xmake-action@v1
+      - uses: xmake-io/github-action-setup-xmake@v1.2.5
         with:
           xmake-version: latest
 
