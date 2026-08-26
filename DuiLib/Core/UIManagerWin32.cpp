@@ -444,7 +444,16 @@ namespace DuiLib {
 
 		//RECT rcPaint = { 0 };
 		CDuiRect rcPaint;
-		if( !::GetUpdateRect(m_hWndPaint, &rcPaint, uiFalse) ) 
+		if( m_bLockUpdate )
+		{
+			// 宿主在拖拽/缩放期间挂起重绘：只校验更新区域不绘制，
+			// 让 DWM 拉伸显示旧帧，WM_EXITSIZEMOVE 后统一重排（去闪烁）。
+			PAINTSTRUCT ps = { 0 };
+			::BeginPaint(m_hWndPaint, &ps);
+			::EndPaint(m_hWndPaint, &ps);
+			return true;
+		}
+		if( !::GetUpdateRect(m_hWndPaint, &rcPaint, uiFalse) )
 			return true;
 
 		// Set focus to first control?
@@ -474,6 +483,9 @@ namespace DuiLib {
 					}
 					m_pRoot->SetPos(rcRoot, true);
 					bNeedSizeMsg = true;
+					// 重排会移动/显隐子控件，局部 update region 会留下陈旧像素
+					// （BeginPaint 会校验整个 region 但只绘制 rcPaint），这里强制整窗重绘。
+					rcPaint = rcClient;
 				}
 				else 
 				{

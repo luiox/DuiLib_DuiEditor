@@ -154,6 +154,11 @@ namespace DuiLib
 			if(!IsWantReturn())
 				m_pOwner->GetManager()->SendNotify(m_pOwner, DUI_MSGTYPE_RETURN);
 		}
+		else if( uMsg == WM_KEYDOWN && TCHAR(wParam) == VK_ESCAPE )
+		{
+			// 原生 EDIT 持有焦点时键盘消息不会到主窗，这里把 ESC 转成通知交给宿主。
+			m_pOwner->GetManager()->SendNotify(m_pOwner, _T("escape"));
+		}
 		else if( uMsg == WM_KEYDOWN && TCHAR(wParam) == VK_TAB ){
 			if (m_pOwner->GetManager()->IsLayered()) {
 				m_pOwner->GetManager()->SetNextTabControl();
@@ -184,10 +189,16 @@ namespace DuiLib
 				m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
 				m_brush->CreateBitmapBrush(m_bmpBrush);
 			}
-			else 
+			else
 			{
-				m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
-				m_brush->CreateSolidBrush(clrColor);
+				// 固定色画刷与尺寸无关。EDIT 控件会缓存 WM_CTLCOLOREDIT 返回的句柄，
+				// 若在此重复重建并释放旧刷，EDIT 下次绘制会用已删除句柄导致背景变黑，
+				// 因此仅在画刷尚不存在时创建一次。
+				if( m_brush == nullptr )
+				{
+					m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
+					m_brush->CreateSolidBrush(clrColor);
+				}
 			}
 		}
 		else if( uMsg == WM_PAINT) {
