@@ -42,10 +42,24 @@
   仍在每次 WM_SIZE 重建 bitmap brush 并释放旧刷，理论上存在同源黑块风险；
   mlaunch 未使用该路径，暂无实测场景，先记录 [待修]。
 
-### 6. 原生 EDIT 吞掉 ESC，宿主收不到 [已修]
-- 位置：同文件 WM_KEYDOWN 链
-- 现象：EDIT 持有焦点时 WM_KEYDOWN 只到 EDIT，ESC 无法让宿主退出搜索等模式。
-- 修复：EDIT 内 ESC → `SendNotify(owner, _T("escape"))` 转通知。
+### 6. 原生 EDIT 内按键宿主收不到（ESC 等） [非库问题]
+- 位置：`UIEditWndWin32.cpp` WM_KEYDOWN 链（Win32 机制：子窗口键盘消息只到子窗口）
+- 现象：EDIT 持有焦点时 WM_KEYDOWN 不经过宿主窗口过程，宿主无法直接响应
+  特定键位（如"ESC 退出搜索模式"这类**宿主业务交互**）。
+- 定性：**不是库 bug**。单行 EDIT 的 ESC 在 Win32 下本就无默认行为，谈不上
+  "被吞"；把具体键位映射成业务动作属于宿主职责，不应改库（曾误将
+  `SendNotify(owner, _T("escape"))` 回迁入库，已回退——私有事件名进库会
+  成为与上游合并的偏移点，也会给其他宿主引入未知通知）。
+- 宿主解法：实现 `ITranslateAccelerator` 并 `AddTranslateAccelerator`。
+  fork 的 `CPaintManagerUI::TranslateMessage`（UIManager.cpp，消息循环
+  DispatchMessage 之前）对子窗口消息也会先调它，可拦截发往原生 EDIT 的
+  键盘消息。返回值约定看聚合器 `CPaintManagerUI::TranslateAccelerator`：
+  `lResult == S_OK` 才吞掉（返回 true → 消息不派发），S_FALSE/其他=放行。
+  注意该回调对经过消息循环的**所有**消息（含鼠标）都会触发，放行分支必须
+  返回 S_FALSE，误返回 S_OK 会吞掉整窗输入。mlaunch AppWindow（搜索框
+  ESC）与 SettingsWindow（捕获态 TAB）均此方案。
+- 对比：同文件的 `VK_RETURN → SendNotify(DUI_MSGTYPE_RETURN)` 与
+  layerd 分支的 `VK_TAB → SetNextTabControl` 是**上游基线既有行为**，不动。
 
 ### 7. 原生 EditWnd 失焦即异步自毁（PostMessage WM_CLOSE） [待修]
 - 位置：`UIEditWndWin32.cpp` `OnKillFocus`

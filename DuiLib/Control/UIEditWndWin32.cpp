@@ -154,11 +154,6 @@ namespace DuiLib
 			if(!IsWantReturn())
 				m_pOwner->GetManager()->SendNotify(m_pOwner, DUI_MSGTYPE_RETURN);
 		}
-		else if( uMsg == WM_KEYDOWN && TCHAR(wParam) == VK_ESCAPE )
-		{
-			// 原生 EDIT 持有焦点时键盘消息不会到主窗，这里把 ESC 转成通知交给宿主。
-			m_pOwner->GetManager()->SendNotify(m_pOwner, _T("escape"));
-		}
 		else if( uMsg == WM_KEYDOWN && TCHAR(wParam) == VK_TAB ){
 			if (m_pOwner->GetManager()->IsLayered()) {
 				m_pOwner->GetManager()->SetNextTabControl();
