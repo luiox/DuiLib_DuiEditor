@@ -33,14 +33,20 @@
 
 ## 输入 / 焦点
 
-### 5. 原生 EDIT 画刷在 WM_SIZE 重复重建 → 背景黑块 [已修]
+### 5. 原生 EDIT 固色画刷每次 WM_SIZE 重建（浪费），黑块根因未定位 [待修]
 - 位置：`DuiLib/Control/UIEditWndWin32.cpp` `HandleMessage` WM_SIZE 分支
-- 现象：固定色路径每次 WM_SIZE 重建 solid brush 并释放旧刷；EDIT 缓存了
-  WM_CTLCOLOREDIT 返回的旧句柄，下次绘制用到已删除句柄 → 整条字高带纯黑。
-- 修复：固定色与尺寸无关，仅在 `m_brush == nullptr` 时创建一次。
-- 遗留：`clrColor < 0xFF000000`（带 alpha，走 CreateControlBackBitmap）分支
-  仍在每次 WM_SIZE 重建 bitmap brush 并释放旧刷，理论上存在同源黑块风险；
-  mlaunch 未使用该路径，暂无实测场景，先记录 [待修]。
+- 澄清：曾把"EDIT 背景黑块"归因于固色路径每次 WM_SIZE 销毁/重建 solid brush
+  （"EDIT 缓存 CTLCOLOREDIT 旧句柄、下次绘制用到已删除句柄"），并曾以
+  "仅首次创建"修复。复查确认该机制不成立——WM_CTLCOLOREDIT 每次 erase 由宿主
+  **同步**询问、同步使用，原生 EDIT 不跨绘制缓存返回的句柄，不存在"用已删除
+  句柄"链路；且"仅首次创建"会让运行时 `SetNativeEditBkColor` 的换色永不生效。
+  已回退为上游行为，留此记录防止再次误诊。
+- 黑块候选根因（未隔离）：① 位图路径（`clrColor < 0xFF000000`）
+  `CreateControlBackBitmap` 快照了未渲染区域；② `0xFFFFFFFF` 哨兵值路径
+  （CTLCOLOREDIT 早退后 EDIT 用默认擦除）。mlaunch 实测时改为完全不设置
+  nativebkcolor 规避，暂无稳定复现场景。
+- 待办：固色路径"每次重建"属浪费可优化，但需先复现黑块、定位真实根因后一并
+  处理两条路径，避免按错误机制打补丁。
 
 ### 6. 原生 EDIT 内按键宿主收不到（ESC 等） [非库问题]
 - 位置：`UIEditWndWin32.cpp` WM_KEYDOWN 链（Win32 机制：子窗口键盘消息只到子窗口）

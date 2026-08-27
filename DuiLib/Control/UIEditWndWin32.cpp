@@ -184,16 +184,10 @@ namespace DuiLib
 				m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
 				m_brush->CreateBitmapBrush(m_bmpBrush);
 			}
-			else
+			else 
 			{
-				// 固定色画刷与尺寸无关。EDIT 控件会缓存 WM_CTLCOLOREDIT 返回的句柄，
-				// 若在此重复重建并释放旧刷，EDIT 下次绘制会用已删除句柄导致背景变黑，
-				// 因此仅在画刷尚不存在时创建一次。
-				if( m_brush == nullptr )
-				{
-					m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
-					m_brush->CreateSolidBrush(clrColor);
-				}
+				m_brush = MakeRefPtr<UIBrush>(UIGlobal::CreateBrush());
+				m_brush->CreateSolidBrush(clrColor);
 			}
 		}
 		else if( uMsg == WM_PAINT) {
