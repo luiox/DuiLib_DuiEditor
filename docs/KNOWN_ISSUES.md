@@ -38,6 +38,9 @@
 - 现象：固定色路径每次 WM_SIZE 重建 solid brush 并释放旧刷；EDIT 缓存了
   WM_CTLCOLOREDIT 返回的旧句柄，下次绘制用到已删除句柄 → 整条字高带纯黑。
 - 修复：固定色与尺寸无关，仅在 `m_brush == nullptr` 时创建一次。
+- 遗留：`clrColor < 0xFF000000`（带 alpha，走 CreateControlBackBitmap）分支
+  仍在每次 WM_SIZE 重建 bitmap brush 并释放旧刷，理论上存在同源黑块风险；
+  mlaunch 未使用该路径，暂无实测场景，先记录 [待修]。
 
 ### 6. 原生 EDIT 吞掉 ESC，宿主收不到 [已修]
 - 位置：同文件 WM_KEYDOWN 链
@@ -61,10 +64,14 @@
 - 现象：原生 EDIT 不存在时（未创建/已自毁），字符输入被整体丢弃。
   宿主需把 WM_CHAR 转发给原生 EDIT 或走 BUTTONDOWN 模拟路径。
 
-### 10. `PreMessageHandler` 抢先处理 VK_TAB [规避]
-- 位置：`DuiLib/Core/UIManager.cpp:2514`
-- 现象：manager 在宿主窗口过程之前对 TAB 执行 `SetNextTabControl`，
-  宿主的 m_pFocus 读取不可信，Tab 轮换需自管索引。
+### 10. `PreMessageHandler` 抢先处理 VK_TAB（消息循环层） [规避]
+- 位置：`DuiLib/Core/UIManager.cpp` `CPaintManagerUI::MessageLoop` / `PreMessageHandler`
+- 现象：TAB 在**消息循环派发前**就被 `PreMessageHandler` 拦截执行
+  `SetNextTabControl`（早于宿主窗口过程，也早于 m_pm.MessageHandler），
+  宿主既收不到 TAB 也读不到可信的 m_pFocus，Tab 轮换需自管索引。
+- 解法：宿主实现 fork 的 `ITranslateAccelerator` 并
+  `AddTranslateAccelerator`——这是唯一早于 PreMessageHandler 的扩展点
+  （mlaunch SettingsWindow 实测）。
 
 ### 11. Shift+F10 被吞，不产生 WM_CONTEXTMENU [待修]
 - 现象：键盘右键菜单键路径失效。宿主用 Ctrl+M / Apps 键 + 手工补发
@@ -93,8 +100,8 @@
 ## 构建 / 工程
 
 ### 15. 无 CI [已修]
-- 修复：`.github/workflows/build.yml`（windows-latest，xmake，release/debug 矩阵，
-  产物上传）。
+- 修复：`.github/workflows/build.yml`（windows-latest，xmake，static/shared ×
+  release/debug 矩阵，产物上传）。
 
 ### 16. xmake 构建脚本缺失 [已修]
 - 修复：根 `xmake.lua`（Win32/GDI 后端静态库；SDL 后端排除，走 CMake 的 Linux
@@ -107,3 +114,23 @@
 ### 18. tests/ 仅有孤立头文件，无测试基建 [待修]
 - 现状：`tests/test_invariant_nanosvg.h` 无 runner。
 - 建议：加一个最小 xmake test target（编译期断言或 gtest 单测），CI 里跑。
+
+### 19. pugixml.cpp 作为独立 TU 与 StdAfx 的 PUGIXML_HEADER_ONLY 冲突 [已修]
+- 位置：`DuiLib/StdAfx.h:82` 无条件 `#define PUGIXML_HEADER_ONLY`，
+  所有含 StdAfx.h 的 TU 内联一份 pugi 实现（inline COMDAT）；
+  `DuiLib/Utils/pugixml/pugixml.cpp` 独立编译时无此宏、产出强符号。
+- 现象：`add_files("DuiLib/**.cpp")` 类 glob 会把 pugixml.cpp 编进库——
+  shared 链接必 LNK2005/LNK1169；static 下也是一份冗余实现。
+- 修复：xmake.lua 排除 `DuiLib/Utils/pugixml/pugixml.cpp`。宿主侧以 glob
+  编源码时同样需要排除（mlaunch DuiLibLite 已同步）。
+
+### 20. 构建依赖 VS 的 ATL 组件（atlimage.h） [规避]
+- 位置：`DuiLib/Control/UIImageBoxEx.h`（经 UIlib.h 无条件包含）→ atlimage.h。
+- 现象：VS 未装"适用于最新 v143 生成工具的 C++ ATL"组件时任何包含 UIlib.h
+  的 TU 直接 C1083；GitHub runner 自带 ATL 所以 CI 掩盖了本机缺组件的问题。
+- 规避：本机安装 ATL 组件（mlaunch 实测 14.44 工具集路径
+  `VC\Tools\MSVC\<ver>\atlmfc\include`）。注意 VS 组件装完后 xmake 需删
+  `%LOCALAPPDATA%\.xmake\cache\detect` 重新探测 vstudio 环境，`xmake f -c`
+  （项目级）清不掉该缓存。
+- 备注：若未来需要无 ATL 构建，可给 UIImageBoxEx.h / ControlFactory 的
+  CImageBoxExUI 注册加 `DUILIB_NO_IMAGEBOXEX` 门控（mlaunch 不使用该控件）。

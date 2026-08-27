@@ -9,6 +9,9 @@
 --     非 SDL 构建必须整组排除（后端由 DUILIB_SDL 宏门控，Win32 路径不定义该宏）。
 --   - Utils/unzip.cpp：依赖 zlib 的解压工具路径，宿主按需自带。
 --   - Utils/UIDataExchange.cpp：依赖旧式数据绑定组件，宿主按需自带。
+--   - Utils/pugixml/pugixml.cpp：StdAfx.h 无条件 #define PUGIXML_HEADER_ONLY，
+--     所有含 StdAfx.h 的 TU 已内联一份 pugi 实现（inline COMDAT）；该 TU 独立编译时
+--     无此宏、产出强符号定义，shared 链接必 LNK2005（static 亦冗余），必须排除。
 
 set_project("DuiLib_DuiEditor")
 set_version("1.1.0")
@@ -51,7 +54,8 @@ target("DuiLib")
         "DuiLib/**/*Sdl.cpp",
         "DuiLib/**/*SDL.cpp",
         "DuiLib/Utils/unzip.cpp",
-        "DuiLib/Utils/UIDataExchange.cpp"
+        "DuiLib/Utils/UIDataExchange.cpp",
+        "DuiLib/Utils/pugixml/pugixml.cpp"
     )
 
     if is_kind("shared") then

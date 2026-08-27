@@ -13,6 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         mode: [release, debug]
+        kind: [static, shared]
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +21,8 @@ jobs:
         with:
           xmake-version: latest
 
-      - name: configure (${{ matrix.mode }})
-        run: xmake f -p windows -a x64 -m ${{ matrix.mode }} -y
+      - name: configure (${{ matrix.kind }}/${{ matrix.mode }})
+        run: xmake f -p windows -a x64 -m ${{ matrix.mode }} --kind=${{ matrix.kind }} -y
 
       - name: build
         run: xmake -y
@@ -35,6 +36,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DuiLib-windows-x64-${{ matrix.mode }}
+          name: DuiLib-windows-x64-${{ matrix.kind }}-${{ matrix.mode }}
           path: ${{ steps.lib.outputs.path }}
           if-no-files-found: error
