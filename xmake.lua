@@ -41,10 +41,15 @@ target("nanosvg")
     add_headerfiles("3rd/nanosvg/*.h")
 target_end()
 
+target("stb")
+    set_kind("phony")
+    add_headerfiles("3rd/stb/*.h")
+target_end()
+
 target("DuiLib")
     set_kind("$(kind)")
     set_languages("cxx17")
-    add_deps("pugixml", "nanosvg")
+    add_deps("pugixml", "nanosvg", "stb")
 
     if is_mode("debug") then
         set_symbols("debug")
