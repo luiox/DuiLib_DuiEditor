@@ -1,4 +1,29 @@
-# DuiEditor
+# DuiLib_DuiEditor (fork)
+
+[![build](https://github.com/luiox/DuiLib_DuiEditor/actions/workflows/build.yml/badge.svg)](https://github.com/luiox/DuiLib_DuiEditor/actions/workflows/build.yml)
+
+> 本仓库是 [xfcanyue/DuiLib_DuiEditor](https://github.com/xfcanyue/DuiLib_DuiEditor) 的下游 fork，
+> 在上游基础上维护：Windows 构建脚本与 CI、实测 bug 修复、已知问题清单。
+> 上游合并策略：保持最小 diff，逐条对照 `docs/KNOWN_ISSUES.md`。
+
+## 构建（Windows / MSVC / GDI 后端）
+
+```powershell
+xmake f -p windows -a x64 -m release   # 首次配置；debug 同理
+xmake                                  # 构建静态库 DuiLib.lib
+xmake f --kind=shared                  # 如需动态库
+```
+
+* 产物：静态库（使用方需定义 `UILIB_STATIC`）。
+* Win32 构建排除 SDL 后端源码（`*Sdl*.cpp`，由 `DUILIB_SDL` 宏门控）；
+  Linux/macOS 的 SDL 构建走 `DuiLib/CMakeLists.txt`。
+* CI：GitHub Actions（windows-latest，release/debug 双矩阵），见
+  `.github/workflows/build.yml`。
+* 已知问题与修复状态：`docs/KNOWN_ISSUES.md`。
+
+---
+
+# DuiEditor（上游原文）
 
 ### 一. 开源说明
 

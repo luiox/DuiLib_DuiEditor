@@ -1,0 +1,156 @@
+# DuiLib（本 fork）已知问题清单
+
+> 来源：mlaunch（C++/DuiLib 启动器）重写过程中的实测踩坑，逐条在代码层核实过。
+> 状态标记：[已修] 本 fork 已修复；[待修] 计划在本 fork 修复；[规避] 宿主侧绕过，库内暂不动。
+> 修复原则：每个修复保持最小 diff、附实测场景说明，便于日后与上游（xfcanyue/DuiLib_DuiEditor）对照合并。
+
+## 渲染 / 绘制
+
+### 1. 全量重排后局部 update region 留下陈旧像素 [已修]
+- 位置：`DuiLib/Core/UIManagerWin32.cpp` `CPaintManagerWin32UI::OnPaint`
+- 现象：`m_pRoot->IsUpdateNeeded()` 分支重排后仍按旧 update region 绘制，
+  被移动/显隐的子控件区域出现残影（实测：搜索模式切换后 body 未下移的"鬼影"）。
+- 修复：重排分支末尾 `rcPaint = rcClient` 强制整窗重绘。
+
+### 2. LockUpdate 期间仍实际执行绘制，DWM 显示旧帧被拉伸 [已修]
+- 位置：同文件 `OnPaint`
+- 现象：宿主在 WM_ENTRYSIZEMOVE/WM_SIZING 期间 `SetLockUpdate(true)` 想去闪烁，
+  但绘制路径照走，DWM 拉伸旧帧反而闪烁。
+- 修复：`m_bLockUpdate` 时仅 BeginPaint/EndPaint 校验更新区域，不绘制；
+  WM_EXITSIZEMOVE 后由宿主统一重排。
+
+### 3. `CControlUI::NeedUpdate` 对不可见控件直接早退 [待修]
+- 位置：`DuiLib/Core/UIControl.cpp:1069`
+- 现象：`NeedUpdate()` 开头 `if(!IsVisible()) return;`——控件在隐藏状态下被
+  标记更新会被丢弃，之后 `SetVisible(true)` 若无显式 NeedUpdate 不会重绘。
+  宿主被迫在显隐切换处手工 `GetRoot()->NeedUpdate()`。
+- 建议方案：不可见时仍置 `m_bUpdateNeeded = true`，仅跳过 Invalidate。
+
+### 4. 部分更新（partial update）路径依赖陈旧 m_rcItem [规避]
+- 位置：`OnPaint` 的 `__FindControlsFromUpdate` 单控件分支
+- 现象：只对"被标记控件"按其当前 m_rcItem 重绘，控件自身 rect 变了但父容器
+  未重排时画错位置。宿主侧统一走整窗重排规避（见 mlaunch UpdateSearchUi）。
+
+## 输入 / 焦点
+
+### 5. 原生 EDIT 固色画刷每次 WM_SIZE 重建（浪费），黑块根因未定位 [待修]
+- 位置：`DuiLib/Control/UIEditWndWin32.cpp` `HandleMessage` WM_SIZE 分支
+- 澄清：曾把"EDIT 背景黑块"归因于固色路径每次 WM_SIZE 销毁/重建 solid brush
+  （"EDIT 缓存 CTLCOLOREDIT 旧句柄、下次绘制用到已删除句柄"），并曾以
+  "仅首次创建"修复。复查确认该机制不成立——WM_CTLCOLOREDIT 每次 erase 由宿主
+  **同步**询问、同步使用，原生 EDIT 不跨绘制缓存返回的句柄，不存在"用已删除
+  句柄"链路；且"仅首次创建"会让运行时 `SetNativeEditBkColor` 的换色永不生效。
+  已回退为上游行为，留此记录防止再次误诊。
+- 黑块候选根因（未隔离）：① 位图路径（`clrColor < 0xFF000000`）
+  `CreateControlBackBitmap` 快照了未渲染区域；② `0xFFFFFFFF` 哨兵值路径
+  （CTLCOLOREDIT 早退后 EDIT 用默认擦除）。mlaunch 实测时改为完全不设置
+  nativebkcolor 规避，暂无稳定复现场景。
+- 待办：固色路径"每次重建"属浪费可优化，但需先复现黑块、定位真实根因后一并
+  处理两条路径，避免按错误机制打补丁。
+
+### 6. 原生 EDIT 内按键宿主收不到（ESC 等） [非库问题]
+- 位置：`UIEditWndWin32.cpp` WM_KEYDOWN 链（Win32 机制：子窗口键盘消息只到子窗口）
+- 现象：EDIT 持有焦点时 WM_KEYDOWN 不经过宿主窗口过程，宿主无法直接响应
+  特定键位（如"ESC 退出搜索模式"这类**宿主业务交互**）。
+- 定性：**不是库 bug**。单行 EDIT 的 ESC 在 Win32 下本就无默认行为，谈不上
+  "被吞"；把具体键位映射成业务动作属于宿主职责，不应改库（曾误将
+  `SendNotify(owner, _T("escape"))` 回迁入库，已回退——私有事件名进库会
+  成为与上游合并的偏移点，也会给其他宿主引入未知通知）。
+- 宿主解法：实现 `ITranslateAccelerator` 并 `AddTranslateAccelerator`。
+  fork 的 `CPaintManagerUI::TranslateMessage`（UIManager.cpp，消息循环
+  DispatchMessage 之前）对子窗口消息也会先调它，可拦截发往原生 EDIT 的
+  键盘消息。返回值约定看聚合器 `CPaintManagerUI::TranslateAccelerator`：
+  `lResult == S_OK` 才吞掉（返回 true → 消息不派发），S_FALSE/其他=放行。
+  注意该回调对经过消息循环的**所有**消息（含鼠标）都会触发，放行分支必须
+  返回 S_FALSE，误返回 S_OK 会吞掉整窗输入。mlaunch AppWindow（搜索框
+  ESC）与 SettingsWindow（捕获态 TAB）均此方案。
+- 对比：同文件的 `VK_RETURN → SendNotify(DUI_MSGTYPE_RETURN)` 与
+  layerd 分支的 `VK_TAB → SetNextTabControl` 是**上游基线既有行为**，不动。
+
+### 7. 原生 EditWnd 失焦即异步自毁（PostMessage WM_CLOSE） [待修]
+- 位置：`UIEditWndWin32.cpp` `OnKillFocus`
+- 现象：切换输入框时旧 EDIT 异步残留，FindWindowEx 命中错误窗口、新控件
+  SETFOCUS 不触发重建。宿主需先同步 WM_CLOSE 销毁旧 EDIT 再聚焦新控件
+  （见宿主 edit_focus_helper）。
+- 建议方案：OnKillFocus 改同步 DestroyWindow 或提供宿主可调的同步销毁入口。
+
+### 8. `CPaintManagerUI::SetFocus` 对已焦点控件早退，SETFOCUS 事件丢失 [待修]
+- 位置：`DuiLib/Core/UIManager.cpp:1040`
+- 现象：`pControl == m_pFocus` 直接 return；窗口重激活后程序化聚焦同一
+  EDIT 时 SETFOCUS 不发、原生 EDIT 不重建。宿主需"清焦点→设回"或模拟点击。
+
+### 9. `CEditUI::DoEvent` 无 UIEVENT_CHAR 分支 [待修]
+- 位置：`DuiLib/Control/UIEdit.cpp:59`
+- 现象：原生 EDIT 不存在时（未创建/已自毁），字符输入被整体丢弃。
+  宿主需把 WM_CHAR 转发给原生 EDIT 或走 BUTTONDOWN 模拟路径。
+
+### 10. `PreMessageHandler` 抢先处理 VK_TAB（消息循环层） [规避]
+- 位置：`DuiLib/Core/UIManager.cpp` `CPaintManagerUI::MessageLoop` / `PreMessageHandler`
+- 现象：TAB 在**消息循环派发前**就被 `PreMessageHandler` 拦截执行
+  `SetNextTabControl`（早于宿主窗口过程，也早于 m_pm.MessageHandler），
+  宿主既收不到 TAB 也读不到可信的 m_pFocus，Tab 轮换需自管索引。
+- 解法：宿主实现 fork 的 `ITranslateAccelerator` 并
+  `AddTranslateAccelerator`——这是唯一早于 PreMessageHandler 的扩展点
+  （mlaunch SettingsWindow 实测）。
+
+### 11. Shift+F10 被吞，不产生 WM_CONTEXTMENU [待修]
+- 现象：键盘右键菜单键路径失效。宿主用 Ctrl+M / Apps 键 + 手工补发
+  WM_CONTEXTMENU 规避。
+
+## 控件属性 / API
+
+### 12. CButtonUI 不支持 normalbkcolor/hotbkcolor/pushedbkcolor [待修]
+- 位置：`DuiLib/Control/UIButton.cpp:247` `SetAttribute`
+- 现象：属性被静默忽略（落 CLabelUI），按钮无底色/悬停态。XML 里写了不报错，
+  极易误用。
+- 建议方案：SetAttribute 增加三态底色 + PaintStatusImage 自绘纯色
+  （宿主 appui::ButtonUI 已验证该实现，可直接下沉入库）。
+
+### 13. CCheckBoxUI 视觉态依赖图片资源 [待修]
+- 现象：无 selectedstateimage 等资源时复选框无可见勾选态。
+- 建议方案：无图片时回退自绘（边框 + 对勾），与 #12 一并处理。
+
+### 14. `WindowImplBase::MessageHandler` 是死代码 [待修/兼容性]
+- 位置：`DuiLib/Utils/WinImplBase.cpp:64`
+- 现象：真实消息链是 `HandleMessage → (switch→OnXxx) → HandleCustomMessage
+  (:402) → m_pm.MessageHandler(:405)`，`MessageHandler` 永远不会被调用。
+  按原版 DuiLib 文档/习惯重写它的人会静默失效。
+- 建议方案：HandleMessage 链中调用 MessageHandler，或删除该方法避免误导。
+
+## 构建 / 工程
+
+### 15. 无 CI [已修]
+- 修复：`.github/workflows/build.yml`（windows-latest，xmake，static/shared ×
+  release/debug 矩阵，产物上传）。
+
+### 16. xmake 构建脚本缺失 [已修]
+- 修复：根 `xmake.lua`（Win32/GDI 后端静态库；SDL 后端排除，走 CMake 的 Linux
+  路径不受影响）。排除项与理由见脚本头注释。
+
+### 17. 源码编码混乱 [已修（上游）]
+- 上游 34cf1e3 已全量转 UTF-8 with BOM；此前 GBK 注释会导致 rg/grep 乱码、
+  MSVC /utf-8 下告警。新提交请保持 UTF-8 BOM。
+
+### 18. tests/ 仅有孤立头文件，无测试基建 [待修]
+- 现状：`tests/test_invariant_nanosvg.h` 无 runner。
+- 建议：加一个最小 xmake test target（编译期断言或 gtest 单测），CI 里跑。
+
+### 19. pugixml.cpp 作为独立 TU 与 StdAfx 的 PUGIXML_HEADER_ONLY 冲突 [已修]
+- 位置：`DuiLib/StdAfx.h:82` 无条件 `#define PUGIXML_HEADER_ONLY`，
+  所有含 StdAfx.h 的 TU 内联一份 pugi 实现（inline COMDAT）；
+  `DuiLib/Utils/pugixml/pugixml.cpp` 独立编译时无此宏、产出强符号。
+- 现象：`add_files("DuiLib/**.cpp")` 类 glob 会把 pugixml.cpp 编进库——
+  shared 链接必 LNK2005/LNK1169；static 下也是一份冗余实现。
+- 修复：xmake.lua 排除 `DuiLib/Utils/pugixml/pugixml.cpp`。宿主侧以 glob
+  编源码时同样需要排除（mlaunch DuiLibLite 已同步）。
+
+### 20. 构建依赖 VS 的 ATL 组件（atlimage.h） [规避]
+- 位置：`DuiLib/Control/UIImageBoxEx.h`（经 UIlib.h 无条件包含）→ atlimage.h。
+- 现象：VS 未装"适用于最新 v143 生成工具的 C++ ATL"组件时任何包含 UIlib.h
+  的 TU 直接 C1083；GitHub runner 自带 ATL 所以 CI 掩盖了本机缺组件的问题。
+- 规避：本机安装 ATL 组件（mlaunch 实测 14.44 工具集路径
+  `VC\Tools\MSVC\<ver>\atlmfc\include`）。注意 VS 组件装完后 xmake 需删
+  `%LOCALAPPDATA%\.xmake\cache\detect` 重新探测 vstudio 环境，`xmake f -c`
+  （项目级）清不掉该缓存。
+- 备注：若未来需要无 ATL 构建，可给 UIImageBoxEx.h / ControlFactory 的
+  CImageBoxExUI 注册加 `DUILIB_NO_IMAGEBOXEX` 门控（mlaunch 不使用该控件）。
