@@ -9,9 +9,13 @@
 --     非 SDL 构建必须整组排除（后端由 DUILIB_SDL 宏门控，Win32 路径不定义该宏）。
 --   - Utils/unzip.cpp：依赖 zlib 的解压工具路径，宿主按需自带。
 --   - Utils/UIDataExchange.cpp：依赖旧式数据绑定组件，宿主按需自带。
---   - Utils/pugixml/pugixml.cpp：StdAfx.h 无条件 #define PUGIXML_HEADER_ONLY，
---     所有含 StdAfx.h 的 TU 已内联一份 pugi 实现（inline COMDAT）；该 TU 独立编译时
---     无此宏、产出强符号定义，shared 链接必 LNK2005（static 亦冗余），必须排除。
+--
+-- * 第三方库：位于 3rd/（见 3rd/README.md）。核心实际使用的三个
+--   （pugixml / nanosvg / stb）均为 header-only 接入方式——pugixml 由
+--   StdAfx.h 无条件 #define PUGIXML_HEADER_ONLY 后内联进每个 TU，
+--   nanosvg/stb 的 *_IMPLEMENTATION 均集中在 Render/IRender.cpp 单 TU，
+--   故以 headeronly target 登记（依赖关系显式化，且不改变既有包含路径
+--   语义：源码经文件相对路径引用 3rd/ 头）。
 
 set_project("DuiLib_DuiEditor")
 set_version("1.1.0")
@@ -25,9 +29,17 @@ option("kind")
     set_showmenu("target kind: static(default) or shared")
 option_end()
 
+-- 第三方库 target（header-only 登记，用法与差异见各目录 LOCAL_CHANGES.md）
+-- 第三方库 target（登记依赖关系；header-only 用法见各目录 LOCAL_CHANGES.md）
+target("pugixml")
+    set_kind("phony")
+    add_headerfiles("3rd/pugixml/*.hpp")
+target_end()
+
 target("DuiLib")
     set_kind("$(kind)")
     set_languages("cxx17")
+    add_deps("pugixml")
 
     if is_mode("debug") then
         set_symbols("debug")
@@ -54,8 +66,7 @@ target("DuiLib")
         "DuiLib/**/*Sdl.cpp",
         "DuiLib/**/*SDL.cpp",
         "DuiLib/Utils/unzip.cpp",
-        "DuiLib/Utils/UIDataExchange.cpp",
-        "DuiLib/Utils/pugixml/pugixml.cpp"
+        "DuiLib/Utils/UIDataExchange.cpp"
     )
 
     if is_kind("shared") then
