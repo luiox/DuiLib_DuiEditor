@@ -269,9 +269,9 @@ namespace DuiLib {
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../Utils/stb_image_write.h"
 #define NANOSVG_IMPLEMENTATION
-#include "../Utils/nanosvg.h"
+#include "../../3rd/nanosvg/nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "../Utils/nanosvgrast.h"
+#include "../../3rd/nanosvg/nanosvgrast.h"
 	static LPBYTE svg_load_from_memory(const LPBYTE buffer, int &out_width, int &out_height, int hope_width, int hope_height, CDuiColor fillcolor, CPaintManagerUI* pManager)
 	{
 		LPBYTE pImage = NULL;

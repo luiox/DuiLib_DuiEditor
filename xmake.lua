@@ -36,10 +36,15 @@ target("pugixml")
     add_headerfiles("3rd/pugixml/*.hpp")
 target_end()
 
+target("nanosvg")
+    set_kind("phony")
+    add_headerfiles("3rd/nanosvg/*.h")
+target_end()
+
 target("DuiLib")
     set_kind("$(kind)")
     set_languages("cxx17")
-    add_deps("pugixml")
+    add_deps("pugixml", "nanosvg")
 
     if is_mode("debug") then
         set_symbols("debug")
