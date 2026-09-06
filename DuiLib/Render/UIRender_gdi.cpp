@@ -456,6 +456,24 @@ namespace DuiLib {
 
 		Gdiplus::Graphics graphics( hDC );
 		Gdiplus::SolidBrush brush(Gdiplus::Color((LOBYTE((color)>>24)), GetBValue(color), GetGValue(color), GetRValue(color)));
+		// patch: round > 0 时画圆角填充（原实现忽略 round 参数，XML cornerradius / 自绘控件均受影响）
+		if( round.cx > 0 && round.cy > 0 ) {
+			int rx = round.cx; int ry = round.cy;
+			int max_rx = (rc.right - rc.left) / 2; int max_ry = (rc.bottom - rc.top) / 2;
+			if( rx > max_rx ) rx = max_rx;
+			if( ry > max_ry ) ry = max_ry;
+			Gdiplus::GraphicsPath path;
+			float x0 = (float)rc.left; float y0 = (float)rc.top;
+			float x1 = (float)rc.right; float y1 = (float)rc.bottom;
+			float frx = (float)rx; float fry = (float)ry;
+			path.AddArc(x0, y0, frx * 2, fry * 2, 180.0f, 90.0f);
+			path.AddArc(x1 - frx * 2, y0, frx * 2, fry * 2, 270.0f, 90.0f);
+			path.AddArc(x1 - frx * 2, y1 - fry * 2, frx * 2, fry * 2, 0.0f, 90.0f);
+			path.AddArc(x0, y1 - fry * 2, frx * 2, fry * 2, 90.0f, 90.0f);
+			path.CloseFigure();
+			graphics.FillPath(&brush, &path);
+			return;
+		}
 		graphics.FillRectangle(&brush, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top);
 	}
 
