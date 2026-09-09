@@ -234,17 +234,39 @@ namespace DuiLib {
 
 	bool UIRender_gdi::Resize(int width, int height)
 	{
-		if(!m_curBmp) 
+		if(!m_curBmp)
 			return false;
 
 		if(m_curBmp->GetWidth() == width && m_curBmp->GetHeight() == height)
 			return false;
 
-		m_curBmp->DeleteObject();
-		if(!m_curBmp->CreateARGB32Bitmap(m_hDC, width, height, uiTrue))
+		// 保留旧帧内容:先按新尺寸另建位图,把旧内容按左上角对齐逐行拷入,
+		// 再切换并释放旧位图。原先"销毁+重建"使后备位图在每次尺寸变化后
+		// 都是全零(黑)图像:窗口缩放扩大时,新暴露区域在下一次整窗重绘之前
+		// 一直是黑块/未定义像素,释放鼠标后的整帧重绘也多出一次大块分配。
+		CStdRefPtr<UIBitmap> bmpNew = MakeRefPtr<UIBitmap>(UIGlobal::CreateBitmap());
+		if(!bmpNew->CreateARGB32Bitmap(m_hDC, width, height, uiTrue))
 			return false;
 
-		SelectObject(m_curBmp);
+		const int oldWidth = m_curBmp->GetWidth();
+		const int oldHeight = m_curBmp->GetHeight();
+		const int copyWidth = width < oldWidth ? width : oldWidth;
+		const int copyHeight = height < oldHeight ? height : oldHeight;
+		BYTE* pSrcBits = m_curBmp->GetBits();
+		BYTE* pDstBits = bmpNew->GetBits();
+		if(copyWidth > 0 && copyHeight > 0 && pSrcBits != NULL && pDstBits != NULL)
+		{
+			const int pitchSrc = oldWidth * 4;
+			const int pitchDst = width * 4;
+			const size_t cbRow = static_cast<size_t>(copyWidth) * 4;
+			for(int y = 0; y < copyHeight; ++y)
+				memcpy(pDstBits + static_cast<size_t>(y) * pitchDst,
+					pSrcBits + static_cast<size_t>(y) * pitchSrc, cbRow);
+		}
+
+		// SelectObject 会把新位图选入 m_hDC 并完成 m_curBmp 的引用交接,
+		// 旧位图在脱选后被真正释放(与原实现的 GDI 生命周期一致)。
+		SelectObject(bmpNew);
 		return true;
 	}
 

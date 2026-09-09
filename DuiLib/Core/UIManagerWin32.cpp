@@ -446,10 +446,49 @@ namespace DuiLib {
 		CDuiRect rcPaint;
 		if( m_bLockUpdate )
 		{
-			// 宿主在拖拽/缩放期间挂起重绘：只校验更新区域不绘制，
-			// 让 DWM 拉伸显示旧帧，WM_EXITSIZEMOVE 后统一重排（去闪烁）。
+			// 宿主在拖拽/缩放期间挂起重绘:不重排、不重绘控件(布局保持旧位,
+			// WM_EXITSIZEMOVE 后统一重排,避免与 DWM 拉伸交错闪烁)。
+			// 但无 CS_HREDRAW/CS_VREDRAW 时,窗口"扩大"只会无效化新暴露条带,
+			// 若这里只校验不绘制,条带会一直停留在未定义像素,表现为
+			// "向外扩大时新区域空白/黑块,直到释放鼠标"。
+			// 因此锁定期间仍要:后备位图跟手 resize(内容保留,见
+			// UIRender_gdi::Resize),并对旧内容范围之外的新暴露部分按根控件
+			// 背景色补底、随帧送显;旧区域内的偶发局部无效化不重画,
+			// 避免拖拽中把已显示内容抹成背景色。
 			PAINTSTRUCT ps = { 0 };
 			::BeginPaint(m_hWndPaint, &ps);
+			if( Render() != NULL && !rcClient.IsEmpty() && !::IsIconic(m_hWndPaint) &&
+				ps.rcPaint.right > ps.rcPaint.left && ps.rcPaint.bottom > ps.rcPaint.top )
+			{
+				const int nOldWidth = Render()->GetWidth();
+				const int nOldHeight = Render()->GetHeight();
+				Render()->Resize(rcClient.right - rcClient.left, rcClient.bottom - rcClient.top);
+
+				// 新暴露条带 = 更新区域减去旧后备位图覆盖范围(右上/左下角重叠互斥)。
+				CDuiRect rcFillRight(ps.rcPaint);
+				if( rcFillRight.left < nOldWidth ) rcFillRight.left = nOldWidth;
+				CDuiRect rcFillBottom(ps.rcPaint);
+				if( rcFillBottom.top < nOldHeight ) rcFillBottom.top = nOldHeight;
+				if( rcFillBottom.right > nOldWidth ) rcFillBottom.right = nOldWidth;
+
+				if( !rcFillRight.IsEmpty() ) {
+					CDuiColor clrBk = m_pRoot->GetBkColor();
+					if( clrBk <= 0x00FFFFFF ) clrBk = 0xFF000000;	//未指定背景色时兜底为不透明黑
+					Render()->ClearAlpha(rcFillRight);
+					Render()->DrawColor(rcFillRight, CDuiSize(), clrBk);
+				}
+				if( !rcFillBottom.IsEmpty() ) {
+					CDuiColor clrBk = m_pRoot->GetBkColor();
+					if( clrBk <= 0x00FFFFFF ) clrBk = 0xFF000000;
+					Render()->ClearAlpha(rcFillBottom);
+					Render()->DrawColor(rcFillBottom, CDuiSize(), clrBk);
+				}
+				if( !rcFillRight.IsEmpty() || !rcFillBottom.IsEmpty() ) {
+					::BitBlt(m_hDcPaint, ps.rcPaint.left, ps.rcPaint.top,
+						ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top,
+						Render()->GetDC(), ps.rcPaint.left, ps.rcPaint.top, SRCCOPY);
+				}
+			}
 			::EndPaint(m_hWndPaint, &ps);
 			return true;
 		}

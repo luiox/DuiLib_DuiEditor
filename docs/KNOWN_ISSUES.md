@@ -12,12 +12,16 @@
   被移动/显隐的子控件区域出现残影（实测：搜索模式切换后 body 未下移的"鬼影"）。
 - 修复：重排分支末尾 `rcPaint = rcClient` 强制整窗重绘。
 
-### 2. LockUpdate 期间仍实际执行绘制，DWM 显示旧帧被拉伸 [已修]
+### 2. LockUpdate 期间仍实际执行绘制，DWM 显示旧帧被拉伸 [已修，2026-09-09 修订]
 - 位置：同文件 `OnPaint`
-- 现象：宿主在 WM_ENTRYSIZEMOVE/WM_SIZING 期间 `SetLockUpdate(true)` 想去闪烁，
+- 现象：宿主在 WM_ENTERSIZEMOVE/WM_SIZING 期间 `LockUpdate(true)` 想去闪烁，
   但绘制路径照走，DWM 拉伸旧帧反而闪烁。
-- 修复：`m_bLockUpdate` 时仅 BeginPaint/EndPaint 校验更新区域，不绘制；
-  WM_EXITSIZEMOVE 后由宿主统一重排。
+- 修复：`m_bLockUpdate` 时不重排、不重绘控件（`m_bUpdateNeeded` 重排分支同样被
+  锁定挡住），WM_EXITSIZEMOVE 后由宿主统一重排。
+- 修订（2026-09-09，见 #21）：最初实现为"仅 BeginPaint/EndPaint 校验、完全不绘制"，
+  副作用是窗口扩大时新暴露条带被校验后永不绘制（空白/未定义像素，即 mlaunch
+  "向外拖大时新区域不显示"）。现锁定期仅对新暴露条带补底送显，不重绘控件、
+  不重排的去闪烁策略不变。
 
 ### 3. `CControlUI::NeedUpdate` 对不可见控件直接早退 [待修]
 - 位置：`DuiLib/Core/UIControl.cpp:1069`
@@ -30,6 +34,35 @@
 - 位置：`OnPaint` 的 `__FindControlsFromUpdate` 单控件分支
 - 现象：只对"被标记控件"按其当前 m_rcItem 重绘，控件自身 rect 变了但父容器
   未重排时画错位置。宿主侧统一走整窗重排规避（见 mlaunch UpdateSearchUi）。
+
+### 21. 窗口缩放三症状：扩大方向新区域空白 / 释放鼠标瞬间卡顿 / 后备位图反复销毁重建 [已修 2026-09-09]
+- 位置：`DuiLib/Core/UIManagerWin32.cpp` `OnPaint` 锁分支、
+  `DuiLib/Render/UIRender_gdi.cpp` `Resize`、`DuiLib/Core/UIWindowWin32.cpp:19`
+  （窗口类仅 CS_DBLCLKS，无 CS_HREDRAW/CS_VREDRAW）。
+- 根因：
+  ① 无 CS_HREDRAW/CS_VREDRAW 时系统对"扩大"只无效化新暴露条带；锁分支
+    `BeginPaint` 把它校验掉却从不绘制，且该校验发生在 `Render()->Resize`
+    之前——后备位图仍是旧尺寸，条带直到释放鼠标都无有效像素（症状一）。
+  ② `Resize` 每次尺寸变化销毁+重建 DIB（`CreateDIBSection` 全零初始化=黑图），
+    释放鼠标那一帧把"全树 SetPos 重排 + 大位图重分配 + 整窗 ClearAlpha/重绘/
+    BitBlt + 阴影 Update"压缩进一帧（症状二/三的释放爆发部分）。
+- 修复（最小 diff；**不**加 CS_HREDRAW/CS_VREDRAW——那会每个 sizing tick
+  全窗无效化，重绘量反而剧增）：
+  ① `UIRender_gdi::Resize` 改为"新建位图→旧内容左上对齐逐行拷入→SelectObject
+    切换并释放旧位图"；同尺寸调用维持早退。释放鼠标帧的 Resize 命中同尺寸
+    早退，大块分配从释放瞬间消失。
+  ② `OnPaint` 锁分支：仍不重排、不重绘控件（c329337 去闪烁策略保持），
+    但对"旧后备位图范围之外"的新暴露条带（右侧/底部两块，互斥不重叠）按
+    `GetRoot()->GetBkColor()` 补底（未设置时兜底不透明黑）并随帧 BitBlt 送显；
+    旧区域内的偶发局部无效化不重画，避免拖拽中把已显示内容抹成背景色。
+- 适用范围：内容保留在 GDI 后端实现（mlaunch 实际路径）；gdiplus/SDL 后端
+  `Resize` 未改，锁分支的条带补底逻辑为后端无关，仅"旧区像素保留"在那些
+  后端缺失（锁定期 ps.rcPaint 通常只含新条带，实际影响可忽略）。
+- 实测场景：mlaunch 主窗（12 组 171 条列表）向外/向内拖拽缩放：扩大过程新
+  区域即时显示窗口背景色，无空白/黑块/残影；释放后一帧完成重排，无可感知停顿。
+- 遗留：锁定期内容仍为"旧布局锚定左上 + 新区背景色"，重排只在结束后发生
+  （对齐原版行为）；持续缩放中的控件级重绘去闪烁（WM_SYNCPAINT/脏区合并）
+  仍为后续方向。
 
 ## 输入 / 焦点
 
