@@ -13,11 +13,15 @@
 
 - **memcpy 边界检查修复**：源自上游 DuiLib 仓库社区提交
   （`fix: add bounds check before memcpy in nanosvg.h`，见上游仓库
-  PR #11 / V-001 安全修复），本 fork 继承。
-- 全部文件带 UTF-8 BOM（上游 34cf1e3 批量转换）。
+  PR #11 / V-001 安全修复），本 fork 继承。经 git 逐字节核实，这是
+  仓内副本相对继承快照的**唯一**改动。
+- 编码：**无 BOM**，CRLF 行尾（2026-09 核实，原"仅 UTF-8 BOM"记载有误，
+  已更正）。
 
 ## 将来评估
 
-nanosvg 上游久未活跃更新；如换用 xmake-repo 包（`add_requires("nanosvg")`）
-需验证 memcpy 修复是否已含于所选版本，以及 IRender.cpp 的
-IMPLEMENTATION 宏集中方式与包安装头是否兼容。
+nanosvg 上游久未活跃更新。**2026-09 核对结论：保留 vendored（裁决 b）**：
+上游 memononen/nanosvg master 与 xrepo `nanosvg` 包 2022.07.09
+（commit 7e37e00）的 `nsvg__createGradient` 均无 memcpy bounds check
+（2026-09-11 抓取核对），换包=回归安全修复。证据详见 3rd/README.md
+「xrepo 化核对结论」。

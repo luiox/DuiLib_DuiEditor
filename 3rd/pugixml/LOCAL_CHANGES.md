@@ -18,9 +18,9 @@
 
 ## 相对上游 1.11 release 的已知改动
 
-- 全部文件被本仓库上游批量转为 **UTF-8 with BOM**（仓库 34cf1e3
-  「源码全部改为带BOM的UTF-8」），除此之外未发现功能性改动；如需精确
-  diff 请对照 zeux/pugixml v1.11 tag。
+- 编码：**无 BOM**，CRLF 行尾（2026-09 核实；原"仅 UTF-8 BOM"记载有误，
+  已更正）。除此之外未发现功能性改动；如需精确 diff 请对照 zeux/pugixml
+  v1.11 tag。
 - `ViewPugixml/`：VS 调试器可视化工具（上游自带，未使用，随库保留）。
 
 ## 上游合并策略（登记于 3rd/README.md「上游合并策略」节）

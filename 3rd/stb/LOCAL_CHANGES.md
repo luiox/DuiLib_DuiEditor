@@ -10,10 +10,18 @@
 
 ## 相对上游的已知改动
 
-- 仅 UTF-8 BOM（上游 34cf1e3 批量转换）；未发现功能性改动。
+- **无功能性改动**：2026-09-11 以本地 clone 逐字节核对，`stb_image.h`
+  v2.28 / `stb_image_write.h` v1.16 与 nothings/stb@`5736b15` 完全一致
+  （仅 CRLF 行尾差异；该 commit 即 xrepo `stb` 包 2023.01.30 所钉）。
+- 编码：**无 BOM**，CRLF 行尾（原"仅 UTF-8 BOM"记载有误，已更正）。
 
 ## 将来评估
 
-stb 头无版本宏约定，升级需人工核对文件头版本注释。换 xmake-repo 包
-（`add_requires("stb")`）时注意包内头文件布局为 `stb/` 前缀包含
-（`#include "stb/stb_image.h"`），IRender.cpp 包含路径需同步。
+**2026-09 核对结论：暂缓换包（裁决 c）**——内容与 xrepo `stb`
+2023.01.30 完全一致，换包零内容风险；但会引入 configure 期网络依赖并
+改变包含路径约定，与 mlaunch 经 submodule 源码编译的消费方式冲突，
+留待集成后独立评估。换包时注意：
+- 包安装头布局为 `stb/` 前缀（包同时注册了两种包含形式），
+  `IRender.cpp` 的相对路径包含需同步；
+- xrepo 后续新版本（>2023.01.30）会引入 v2.29+ 的解码行为变化，
+  届时按 golden 测试（tests/）回归。

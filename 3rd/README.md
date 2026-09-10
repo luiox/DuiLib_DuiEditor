@@ -31,13 +31,41 @@ DuiLib 库文件）；nanosvg/stb 仍为 `phony`（纯依赖登记）：包含�
 等处的隐藏传递依赖），已按实际情况一并落地。xmake 开关
 `--no_imageboxex=y` / `--no_activex=y`（默认全关，行为与既往一致）。
 
+## xrepo 化核对结论（2026-09-11，逐项带证据）
+
+### nanosvg —— 裁决 (b)：保留 vendored + 差异登记（换包=回归安全修复）
+
+- 仓内 memcpy 边界修复（`nsvg__createGradient`：`memcpy(grad->stops,…)` 前加
+  `if (nstops > 0)`，源自上游 DuiLib 仓库 PR#11）经 git 核实为仓内副本相对
+  继承快照的**唯一**改动（逐字节 diff 仅此 1 处 hunk）。
+- 上游 memononen/nanosvg **master 分支（2026-09-11 抓取）该处 memcpy 无
+  任何 bounds check**；xrepo `nanosvg` 包唯一版本 `2022.07.09`
+  （钉 commit `7e37e00`）**同样无该检查**（同日抓取核对）。
+- ⇒ 换 xrepo 会丢失安全修复；且上游久未发版，无升级收益。保留 vendored。
+
+### stb —— 裁决 (c)：暂缓换包（内容已与 xrepo 对齐，换包零内容风险，但改构建模型）
+
+- 仓内 `stb_image.h` v2.28 / `stb_image_write.h` v1.16 与
+  nothings/stb@`5736b15` **逐字节一致**（仅 CRLF 行尾差异；该 commit 即
+  xrepo `stb` 包 `2023.01.30` 版本所钉 commit，2026-09-11 本地 clone 核对）。
+- 换 xrepo 无任何内容收益（字节一致）；但会引入 configure 期网络依赖并
+  改变包含路径约定，与 mlaunch 经 submodule 源码编译的消费方式冲突，
+  超出本次"内容保持"重构边界。**暂缓**，留待集成后由使用方独立评估。
+- 届时核对要点已注销于 `stb/LOCAL_CHANGES.md`。
+
+### 编码登记更正（本次核对顺带发现）
+
+三库 LOCAL_CHANGES 原记载"仅 UTF-8 BOM"**不实**：实测 pugixml /
+nanosvg / stb 各源文件**均无 BOM**，实际差异为 **CRLF 行尾**
+（继承自仓库 34cf1e3 前后的历史处理）。各 LOCAL_CHANGES.md 已更正。
+
 ## 上游合并策略（各库一节，随差异登记更新）
 
 | 库 | 库文件魔改 | fork 侧偏移点（与上游/宿主合并时的全部触点） |
 | --- | --- | --- |
-| `pugixml/` | **零魔改**（仅 UTF-8 BOM，见 `pugixml/LOCAL_CHANGES.md`） | ① `DuiLib/StdAfx.h` 接入段（去 `PUGIXML_HEADER_ONLY`，约 5 行）；② 根 `xmake.lua` `target("pugixml")`（static + `PUGIXML_WCHAR_MODE`）。库文件可整体替换为上游版本 |
+| `pugixml/` | **零魔改**（无 BOM，仅 CRLF 行尾，见 `pugixml/LOCAL_CHANGES.md`） | ① `DuiLib/StdAfx.h` 接入段（去 `PUGIXML_HEADER_ONLY`，约 5 行）；② 根 `xmake.lua` `target("pugixml")`（static + `PUGIXML_WCHAR_MODE`）。库文件可整体替换为上游版本 |
 | `nanosvg/` | **memcpy 边界检查修复**（上游 DuiLib 仓库 PR#11 继承，见 `nanosvg/LOCAL_CHANGES.md`） | `Render/IRender.cpp` 的 `NANOSVG*_IMPLEMENTATION` 单 TU 接入段 |
-| `stb/` | 零魔改（仅 UTF-8 BOM） | 同上（`STB_IMAGE*_IMPLEMENTATION` 单 TU 接入段） |
+| `stb/` | 零魔改（与上游 5736b15 逐字节一致，见「xrepo 化核对结论」） | 同上（`STB_IMAGE*_IMPLEMENTATION` 单 TU 接入段） |
 
 ## 已在本目录、但核心库不依赖（应用层自取）
 
