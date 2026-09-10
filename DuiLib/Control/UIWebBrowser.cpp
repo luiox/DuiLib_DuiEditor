@@ -1,6 +1,6 @@
 ﻿#include "StdAfx.h"
 
-#ifdef DUILIB_WIN32
+#if defined(DUILIB_WIN32) && !defined(DUILIB_NO_ACTIVEX)
 #include "UIWebBrowser.h"
 #include <atlconv.h>
 #include <atlcomcli.h>

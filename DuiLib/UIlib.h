@@ -131,8 +131,11 @@
 #include "Control/UIIPAddressEx.h"
 
 #include "Control/UIActiveX.h"
+// ATL 相关控件门控：定义 DUILIB_NO_ACTIVEX 可在未安装 ATL 组件的环境编译
+#ifndef DUILIB_NO_ACTIVEX
 #include "Control/UIWebBrowser.h"
 #include "Control/UIFlash.h"
+#endif
 
 #include "Control/UIMenu.h"
 #include "Control/UIMenuWndWin32.h"
@@ -155,7 +158,10 @@
 #include "Control/UIIconButton.h"
 #include "Control/UIDateTimeEx.h"
 #include "Control/UIComboEx.h"
+// ATL(atlimage.h) 门控：定义 DUILIB_NO_IMAGEBOXEX 可在未安装 ATL 组件的环境编译
+#ifndef DUILIB_NO_IMAGEBOXEX
 #include "Control/UIImageBoxEx.h"
+#endif
 #include "Control/UIRollTextEx.h"
 #include "Control/UIMsgWnd.h"
 #include "Control/UIPicture.h"

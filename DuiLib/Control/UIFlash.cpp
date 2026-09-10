@@ -1,6 +1,6 @@
 ﻿#include "StdAfx.h"
 
-#ifdef DUILIB_WIN32
+#if defined(DUILIB_WIN32) && !defined(DUILIB_NO_ACTIVEX)
 #include "UIFlash.h"
 #include <atlcomcli.h>
 

@@ -182,13 +182,30 @@
   DuiLibLite）**必须同步编译 `3rd/pugixml/pugixml.cpp`**（此前
   header-only 天然内联、无需此步），否则 pugi 符号无法解析。
 
-### 20. 构建依赖 VS 的 ATL 组件（atlimage.h） [规避]
-- 位置：`DuiLib/Control/UIImageBoxEx.h`（经 UIlib.h 无条件包含）→ atlimage.h。
+### 20. 构建依赖 VS 的 ATL 组件（atlimage.h） [已修 2026-09：DUILIB_NO_IMAGEBOXEX / DUILIB_NO_ACTIVEX 门控]
+- 位置：`DuiLib/Control/UIImageBoxEx.h:4`（经 UIlib.h 无条件包含）→ atlimage.h。
 - 现象：VS 未装"适用于最新 v143 生成工具的 C++ ATL"组件时任何包含 UIlib.h
   的 TU 直接 C1083；GitHub runner 自带 ATL 所以 CI 掩盖了本机缺组件的问题。
-- 规避：本机安装 ATL 组件（mlaunch 实测 14.44 工具集路径
-  `VC\Tools\MSVC\<ver>\atlmfc\include`）。注意 VS 组件装完后 xmake 需删
-  `%LOCALAPPDATA%\.xmake\cache\detect` 重新探测 vstudio 环境，`xmake f -c`
-  （项目级）清不掉该缓存。
-- 备注：若未来需要无 ATL 构建，可给 UIImageBoxEx.h / ControlFactory 的
-  CImageBoxExUI 注册加 `DUILIB_NO_IMAGEBOXEX` 门控（mlaunch 不使用该控件）。
+- 门控修复（2026-09 收口）：
+  - `DUILIB_NO_IMAGEBOXEX`：`UIlib.h` 的 UIImageBoxEx.h include、
+    ControlFactory 的 `CImageBoxExUI` 注册、UIImageBoxEx.cpp 整文件条件化，
+    定义后核心不依赖 atlimage.h；
+  - `DUILIB_NO_ACTIVEX`：**文档更正**——原备注认为仅 IMAGEBOXEX 门控即可
+    无 ATL 构建，实际 `UIFlash.cpp`（atlcomcli.h + CComPtr）与
+    `UIWebBrowser.cpp`（atlconv.h/atlcomcli.h）同样依赖 ATL，已一并门控
+    （UIlib.h include + ControlFactory 注册 + 文件级条件）。
+  - 门控暴露的隐藏传递依赖已就地修复（默认构建行为不变）：
+    ① `UIMsgWnd.cpp` 的 ATL `CRect` → `CDuiRect`（原经 atlimage.h→
+      atltypes.h 传递可见）；
+    ② `UIFile.cpp` 显式 `#include <shlwapi.h>`（原经 atlimage.h:48 传递
+      引入，PathIsRelative 才能解析）；
+    ③ `UIApplicationWin32.cpp` 的 ATL `CString`（3 处）→ `CDuiString`、
+      `::ATL::CRegKey` RAII → 显式 `RegCloseKey`；
+    ④ `TrayIcon.cpp`/`UIApplicationWin32.cpp` 显式
+      `#pragma comment(lib, shell32/advapi32)`（原靠 ATL 头 defaultlib
+      兜底）；xmake shared syslinks 补 `advapi32 shell32`。
+  - xmake 开关：`xmake f --no_imageboxex=y --no_activex=y`（默认全关 =
+    与既有行为一致），开关只加宏并移除对应 .cpp；验证见
+    `compile_commands.json` 中无任何 atlmfc/atl 路径。
+- 本机临时规避（历史记录）：安装 ATL 组件；注意装完需删
+  `%LOCALAPPDATA%\.xmake\cache\detect` 重新探测 vstudio 环境。

@@ -79,7 +79,9 @@ CMsgWndUI::CMsgWndUI(void)
 	SetMultiLine(true);
 	SetWantCtrlReturn(true);
 	SetWantReturn(true);
-	SetInset(CRect(5,5,5,5));
+	// 原为 ATL CRect(经 UIImageBoxEx.h→atlimage.h 传递可见)；
+	// DUILIB_NO_IMAGEBOXEX 门控下无 ATL，改用等价 CDuiRect
+	SetInset(CDuiRect(5, 5, 5, 5));
 
 	m_pStaticWindow = this;
 

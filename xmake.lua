@@ -26,6 +26,16 @@ option("kind")
     set_showmenu("target kind: static(default) or shared")
 option_end()
 
+-- ATL 门控开关（默认全关 = 与既有行为一致；见 docs/KNOWN_ISSUES.md #20）
+option("no_imageboxex")
+    set_default(false)
+    set_showmenu("define DUILIB_NO_IMAGEBOXEX: drop ATL(atlimage.h)-dependent CImageBoxExUI, no ATL needed")
+option_end()
+option("no_activex")
+    set_default(false)
+    set_showmenu("define DUILIB_NO_ACTIVEX: drop ATL-based CFlashUI/CWebBrowserUI (active-x controls)")
+option_end()
+
 -- 第三方库 target（用法与差异见各目录 LOCAL_CHANGES.md；排除纪律以 3rd/README.md 为单一事实源）
 -- pugixml：独立编译单元（pugixml.cpp 由此 target 编译，DuiLib/StdAfx.h 只 include 头）。
 --   PUGIXML_WCHAR_MODE 必须与 StdAfx.h 的 _UNICODE 条件宏一致——本仓 DuiLib target
@@ -79,7 +89,18 @@ target("DuiLib")
         "DuiLib/Utils/unzip.cpp",
         "DuiLib/Utils/UIDataExchange.cpp"
     )
+    -- ATL 门控（与 UIlib.h / ControlFactory.cpp 的宏一致；默认不启用）
+    if has_config("no_imageboxex") then
+        add_defines("DUILIB_NO_IMAGEBOXEX")
+        remove_files("DuiLib/Control/UIImageBoxEx.cpp")
+    end
+    if has_config("no_activex") then
+        add_defines("DUILIB_NO_ACTIVEX")
+        remove_files("DuiLib/Control/UIFlash.cpp", "DuiLib/Control/UIWebBrowser.cpp")
+    end
 
     if is_kind("shared") then
-        add_syslinks("user32", "gdi32", "comctl32", "ole32", "oleaut32", "imm32", "winmm", "version", "uxtheme")
+        -- advapi32/shell32：注册表（UIApplicationWin32）与托盘（TrayIcon）。
+        -- 之前经 ATL 头的 defaultlib 指令隐式解析，ATL 门控构建下需显式声明。
+        add_syslinks("user32", "gdi32", "comctl32", "ole32", "oleaut32", "imm32", "winmm", "version", "uxtheme", "advapi32", "shell32")
     end

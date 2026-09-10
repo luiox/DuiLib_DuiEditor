@@ -4,6 +4,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+// PathIsRelative 原经 UIlib.h→UIImageBoxEx.h→atlimage.h 传递引入（atlimage.h 内部
+// #include <Shlwapi.h>）；DUILIB_NO_IMAGEBOXEX 门控下无 ATL，需显式包含
+#include <shlwapi.h>
+#pragma comment(lib, "shlwapi.lib")
+
 #ifdef WIN32
 #include "../Utils/unzip.cpp"
 #endif

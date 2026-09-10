@@ -18,6 +18,19 @@ DuiLib 库文件）；nanosvg/stb 仍为 `phony`（纯依赖登记）：包含�
 文件相对路径，target 的作用是把依赖关系显式化，为将来转编译 TU / 换
 标准包留接线位。
 
+## 构建门控（2026-09，含文档更正登记）
+
+核心库支持无 ATL 组件构建（详见 `docs/KNOWN_ISSUES.md` #20）：
+
+- `DUILIB_NO_IMAGEBOXEX`：剔除 `CImageBoxExUI`（atlimage.h 依赖）；
+- `DUILIB_NO_ACTIVEX`：剔除 `CFlashUI` / `CWebBrowserUI`（atlconv/atlcomcli 依赖）。
+
+**文档更正**：原 04 号架构文档/KNOWN_ISSUES #20 备注认为仅
+`DUILIB_NO_IMAGEBOXEX` 即可无 ATL 全量构建——实测不成立（Flash/WebBrowser
+同样依赖 ATL，且 ImageBoxEx 门控暴露 UIMsgWnd/UIFile/UIApplicationWin32
+等处的隐藏传递依赖），已按实际情况一并落地。xmake 开关
+`--no_imageboxex=y` / `--no_activex=y`（默认全关，行为与既往一致）。
+
 ## 上游合并策略（各库一节，随差异登记更新）
 
 | 库 | 库文件魔改 | fork 侧偏移点（与上游/宿主合并时的全部触点） |

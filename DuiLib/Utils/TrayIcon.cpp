@@ -2,6 +2,8 @@
 #include "TrayIcon.h"
 
 #ifdef DUILIB_WIN32
+// Shell_NotifyIcon 所在库；ATL 门控构建下无 ATL 头的 defaultlib 指令兜底，需显式声明
+#pragma comment(lib, "shell32.lib")
 namespace DuiLib
 {
 	CTrayIcon::CTrayIcon(void)

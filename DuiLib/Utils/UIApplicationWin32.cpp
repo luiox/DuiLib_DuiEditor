@@ -1,6 +1,8 @@
 ﻿#include "StdAfx.h"
 
 #ifdef DUILIB_WIN32
+// 注册表 API 所在库；ATL 门控构建下无 ATL 头的 defaultlib 指令兜底，需显式声明
+#pragma comment(lib, "advapi32.lib")
 namespace DuiLib{
 
 CUIApplicationWin32::CUIApplicationWin32(void)
@@ -263,7 +265,9 @@ CDuiString CUIAppRegistryKey::ReadString(LPCTSTR lpszSection, LPCTSTR lpszEntry,
 		HKEY hSecKey = GetSectionKey(lpszSection);
 		if (hSecKey == NULL)
 			return lpszDefault;
-		CString strValue;
+		// 原 ATL CString（经 UIImageBoxEx.h→atlimage.h 传递可见）；DUILIB_NO_IMAGEBOXEX
+		// 门控下无 ATL，改用 CDuiString（REG_SZ 以 \0 结尾，按 \0 扫描与 ReleaseBuffer 等价）
+		CDuiString strValue;
 		DWORD dwType=REG_NONE;
 		DWORD dwCount=0;
 		LONG lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType,
@@ -273,7 +277,6 @@ CDuiString CUIAppRegistryKey::ReadString(LPCTSTR lpszSection, LPCTSTR lpszEntry,
 			ASSERT(dwType == REG_SZ);
 			lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType,
 				(LPBYTE)strValue.GetBuffer(dwCount/sizeof(TCHAR)), &dwCount);
-			strValue.ReleaseBuffer();
 		}
 		RegCloseKey(hSecKey);
 		if (lResult == ERROR_SUCCESS)
@@ -356,11 +359,9 @@ uiBool CUIAppRegistryKey::ReadBinary(LPCTSTR lpszSection, LPCTSTR lpszEntry, LPB
 			return uiFalse;
 		}
 
-		// ensure destruction
-		::ATL::CRegKey rkSecKey(hSecKey);
-
+		// 原以 ::ATL::CRegKey rkSecKey(hSecKey) RAII 关闭句柄；去 ATL 后改为显式关闭
 		DWORD dwType=0;
-		DWORD dwCount=0; 
+		DWORD dwCount=0;
 		LONG lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType, NULL, &dwCount);
 		*pBytes = dwCount;
 		if (lResult == ERROR_SUCCESS)
@@ -370,6 +371,7 @@ uiBool CUIAppRegistryKey::ReadBinary(LPCTSTR lpszSection, LPCTSTR lpszEntry, LPB
 			lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType,
 				*ppData, &dwCount);
 		}
+		RegCloseKey(hSecKey);
 		if (lResult == ERROR_SUCCESS)
 		{
 			ASSERT(dwType == REG_BINARY);
@@ -386,7 +388,7 @@ uiBool CUIAppRegistryKey::ReadBinary(LPCTSTR lpszSection, LPCTSTR lpszEntry, LPB
 	{
 		ASSERT(m_pszProfileName != NULL);
 
-		CString str = ReadString(lpszSection, lpszEntry, NULL);
+		CDuiString str = ReadString(lpszSection, lpszEntry, NULL);
 		if (str.IsEmpty())
 			return uiFalse;
 		ASSERT(str.GetLength()%2 == 0);
@@ -489,7 +491,8 @@ uiBool CUIAppRegistryKey::GetValue(LPCTSTR lpszSection, LPCTSTR lpszEntry, CDuiS
 			strRet = lpszDefault;
 			return uiFalse;
 		}
-		CString strValue;
+		// 原 ATL CString（同 ReadString 处说明），改用 CDuiString
+		CDuiString strValue;
 		DWORD dwType=REG_NONE;
 		DWORD dwCount=0;
 		LONG lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType,
@@ -499,7 +502,6 @@ uiBool CUIAppRegistryKey::GetValue(LPCTSTR lpszSection, LPCTSTR lpszEntry, CDuiS
 			ASSERT(dwType == REG_SZ);
 			lResult = RegQueryValueEx(hSecKey, (LPTSTR)lpszEntry, NULL, &dwType,
 				(LPBYTE)strValue.GetBuffer(dwCount/sizeof(TCHAR)), &dwCount);
-			strValue.ReleaseBuffer();
 		}
 		RegCloseKey(hSecKey);
 		if (lResult == ERROR_SUCCESS)
