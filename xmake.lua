@@ -101,3 +101,40 @@ target("DuiLib")
         -- 之前经 ATL 头的 defaultlib 指令隐式解析，ATL 门控构建下需显式声明。
         add_syslinks("user32", "gdi32", "comctl32", "ole32", "oleaut32", "imm32", "winmm", "version", "uxtheme", "advapi32", "shell32")
     end
+
+-- 测试（KNOWN_ISSUES #18；零外部依赖的轻量断言，见 tests/test_main.cpp）
+-- set_default(false)：不进默认构建；运行 xmake run duilib_test（或 xmake test）。
+-- 仅 --kind=static（默认）下存在：nanosvg/stb 实现位于 IRender.cpp 单 TU 且
+-- 不导出（无 UILIB_API），shared 配置下测试无法链接，属预期。
+if is_config("kind", "static") then
+target("duilib_test")
+    set_kind("binary")
+    set_default(false)
+    set_languages("cxx17")
+    add_deps("DuiLib", "pugixml")
+    if is_mode("debug") then
+        set_symbols("debug")
+        set_optimize("none")
+    else
+        set_optimize("faster")
+    end
+    -- 与 DuiLib target 同口径的平台/字符集宏；UILIB_STATIC=消费静态库；
+    -- PUGIXML_WCHAR_MODE 与 pugixml target 编译口径一致（测试 TU 只带声明）
+    add_defines("WIN32", "_WIN32", "WINDOWS", "UNICODE", "_UNICODE",
+        "UILIB_STATIC", "PUGIXML_WCHAR_MODE")
+    -- ATL 门控与 DuiLib target 同步（工厂注册集合的行为面随门控变化）
+    if has_config("no_imageboxex") then
+        add_defines("DUILIB_NO_IMAGEBOXEX")
+    end
+    if has_config("no_activex") then
+        add_defines("DUILIB_NO_ACTIVEX")
+    end
+    if is_arch("x64") then
+        add_defines("_WIN64")
+    end
+    add_files("tests/*.cpp")
+    add_syslinks("user32", "gdi32", "comctl32", "ole32", "oleaut32",
+        "imm32", "winmm", "version", "uxtheme", "advapi32", "shell32")
+    add_tests("default")
+target_end()
+end

@@ -18,15 +18,22 @@
 
 ## 相对上游 1.11 release 的已知改动
 
+- **命名空间重命名 `pugi` → `ui_pugi`**（2026-09 核对发现，此前登记漏记）：
+  `pugixml.hpp` 5 处、`pugixml.cpp` 11 处标识符被直接改写，DuiLib 侧
+  `UIXmlDocument.cpp` 等以 `ui_pugi::` 引用。目的：避免与宿主链接的
+  pugixml 符号冲突。
+  归零路径（下次与上游同步时建议）：改为仅在 `pugiconfig.hpp`
+  （上游许可的配置点）加 `#define pugi ui_pugi`，即可恢复源文件零魔改、
+  可整体替换，ABI 不变。
 - 编码：**无 BOM**，CRLF 行尾（2026-09 核实；原"仅 UTF-8 BOM"记载有误，
-  已更正）。除此之外未发现功能性改动；如需精确 diff 请对照 zeux/pugixml
-  v1.11 tag。
+  已更正）。
 - `ViewPugixml/`：VS 调试器可视化工具（上游自带，未使用，随库保留）。
 
 ## 上游合并策略（登记于 3rd/README.md「上游合并策略」节）
 
-- 库文件零魔改（仅 BOM），升级/合并时 `pugixml.{cpp,hpp}`、`pugiconfig.hpp`
-  可整体替换为上游对应版本，无需适配；
+- 库文件魔改 = 命名空间重命名（见上节），升级/合并时需在
+  `pugixml.{cpp,hpp}` 上重放该重命名（或改走 `pugiconfig.hpp` 的
+  `#define pugi ui_pugi` 归零路径，见上节）；
 - fork 侧改动收敛在 **StdAfx.h 接入段**（去掉 HEADER_ONLY，约 5 行）与
   **根 xmake.lua 的 pugixml target**，两处即为与上游/宿主合并时的全部
   偏移点；上游 VS 工程（vcxproj）若要恢复可构建，需把

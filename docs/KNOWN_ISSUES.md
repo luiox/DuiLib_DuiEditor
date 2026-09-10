@@ -165,9 +165,19 @@
 - 上游 34cf1e3 已全量转 UTF-8 with BOM；此前 GBK 注释会导致 rg/grep 乱码、
   MSVC /utf-8 下告警。新提交请保持 UTF-8 BOM。
 
-### 18. tests/ 仅有孤立头文件，无测试基建 [待修]
-- 现状：`tests/test_invariant_nanosvg.h` 无 runner。
-- 建议：加一个最小 xmake test target（编译期断言或 gtest 单测），CI 里跑。
+### 18. tests/ 仅有孤立头文件，无测试基建 [已修 2026-09]
+- 修复：`tests/test_main.cpp` + 根 `xmake.lua` `target("duilib_test")`
+  （binary，`set_default(false)` 不进默认构建）。零外部依赖轻量断言，
+  覆盖：pugixml 独立 TU 解析/序列化（WCHAR_MODE ABI）、CDuiString、
+  CDuiRect（ATL 门控触点）、控件工厂（含 ATL 门控注册集合行为面）、
+  nanosvg 解析（含原 test_invariant_nanosvg.h 的 gradient-stops 不变量
+  移植，孤立头文件已删除）、stb PNG 写/读内存回路。
+- 运行：`xmake run duilib_test`（或 `xmake test`）。仅 `--kind=static`
+  （默认）下存在——nanosvg/stb 实现位于 IRender.cpp 单 TU 且不经 DLL
+  导出，shared 配置无法链接，属预期。
+- 过程发现：本仓 pugixml 库文件带 `pugi`→`ui_pugi` 命名空间重命名
+  （此前登记漏记），已补登记至 `3rd/pugixml/LOCAL_CHANGES.md` 与
+  `3rd/README.md` 上游合并策略表。
 
 ### 19. pugixml header-only 全 TU 内联（#19） [已修 2026-09：转独立 TU]
 - 原状：`DuiLib/StdAfx.h` 无条件 `#define PUGIXML_HEADER_ONLY`，所有含
@@ -177,7 +187,9 @@
 - 修复（2026-09 收口）：`StdAfx.h` 去掉 `PUGIXML_HEADER_ONLY`，只 include
   `3rd/pugixml/pugixml.hpp` 引入声明；根 `xmake.lua` 的 `target("pugixml")`
   改为 static，独立编译 `3rd/pugixml/pugixml.cpp`（`PUGIXML_WCHAR_MODE`
-  与 `_UNICODE` 头侧宏一致）。库文件零魔改，上游合并策略登记于
+  与 `_UNICODE` 头侧宏一致）。库文件魔改仅命名空间重命名
+  `pugi`→`ui_pugi`（2026-09 核实登记，见
+  `3rd/pugixml/LOCAL_CHANGES.md`），上游合并策略登记于
   `3rd/README.md`。
 - 宿主注意：以 `DuiLib/**.cpp` glob 编源码的宿主（如 mlaunch
   DuiLibLite）**必须同步编译 `3rd/pugixml/pugixml.cpp`**（此前

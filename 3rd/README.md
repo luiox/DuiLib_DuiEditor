@@ -63,7 +63,7 @@ nanosvg / stb 各源文件**均无 BOM**，实际差异为 **CRLF 行尾**
 
 | 库 | 库文件魔改 | fork 侧偏移点（与上游/宿主合并时的全部触点） |
 | --- | --- | --- |
-| `pugixml/` | **零魔改**（无 BOM，仅 CRLF 行尾，见 `pugixml/LOCAL_CHANGES.md`） | ① `DuiLib/StdAfx.h` 接入段（去 `PUGIXML_HEADER_ONLY`，约 5 行）；② 根 `xmake.lua` `target("pugixml")`（static + `PUGIXML_WCHAR_MODE`）。库文件可整体替换为上游版本 |
+| `pugixml/` | **命名空间重命名 `pugi`→`ui_pugi`**（~16 处标识符，见 `pugixml/LOCAL_CHANGES.md`；归零路径亦登记） | ① `DuiLib/StdAfx.h` 接入段（去 `PUGIXML_HEADER_ONLY`，约 5 行）；② 根 `xmake.lua` `target("pugixml")`（static + `PUGIXML_WCHAR_MODE`）。库文件整体替换时需重放重命名 |
 | `nanosvg/` | **memcpy 边界检查修复**（上游 DuiLib 仓库 PR#11 继承，见 `nanosvg/LOCAL_CHANGES.md`） | `Render/IRender.cpp` 的 `NANOSVG*_IMPLEMENTATION` 单 TU 接入段 |
 | `stb/` | 零魔改（与上游 5736b15 逐字节一致，见「xrepo 化核对结论」） | 同上（`STB_IMAGE*_IMPLEMENTATION` 单 TU 接入段） |
 
