@@ -67,7 +67,32 @@ nanosvg / stb 各源文件**均无 BOM**，实际差异为 **CRLF 行尾**
 | `nanosvg/` | **memcpy 边界检查修复**（上游 DuiLib 仓库 PR#11 继承，见 `nanosvg/LOCAL_CHANGES.md`） | `Render/IRender.cpp` 的 `NANOSVG*_IMPLEMENTATION` 单 TU 接入段 |
 | `stb/` | 零魔改（与上游 5736b15 逐字节一致，见「xrepo 化核对结论」） | 同上（`STB_IMAGE*_IMPLEMENTATION` 单 TU 接入段） |
 
-## 已在本目录、但核心库不依赖（应用层自取）
+## 构建排除清单（单一事实源）
+
+> 本节是"哪些源码/目录被核心构建排除"的**唯一权威清单**。
+> 根 `xmake.lua` 的 `remove_files` 与注释只保留一句话理由 + 指回本节；
+> 宿主（mlaunch `DuiLibLite`）同步 `remove_files` 时**以本节为准**。
+
+**维护规则**（双向约束）：
+
+1. 变更根 `xmake.lua` 的 `remove_files` / 门控开关 ⇒ **同一提交**内更新本节；
+2. 变更本节 ⇒ 同一提交内核对 `xmake.lua` 与 `docs/KNOWN_ISSUES.md`；
+3. 宿主侧（mlaunch）增删排除项时，先比对本节确认 fork 侧是否同步变更；
+4. 涉及 `3rd/` 目录分类变化的，同步更新上方登记表与对应 `LOCAL_CHANGES.md`。
+
+| 排除项（`xmake.lua` remove_files） | 性质 | 理由 |
+| --- | --- | --- |
+| `DuiLib/**/*Sdl.cpp`、`DuiLib/**/*SDL.cpp` | 真排除（不编译） | SDL 后端源码：头文件在 `#ifdef DUILIB_SDL` 之外无条件包含 SDL 头，非 SDL 构建必须整组排除（SDL 构建走 CMake 的上游路径） |
+| `DuiLib/Utils/UIDataExchange.cpp` | 真排除（不编译） | 依赖旧式数据绑定组件与 ATL `CString`，核心渲染不需要；宿主按需自带 |
+| `DuiLib/Utils/unzip.cpp` | **仅防双编译**（代码实际在库里） | 事实更正（2026-09）：该文件被 `Core/UIFile.cpp` **文本 `#include`**，随 UIFile TU 一起编译进库——它是 repackaged zlib 子集、自包含，并无外部 zlib 依赖；remove_files 仅防止 glob 把它再编译一遍造成符号冲突。原注释"宿主按需自带 zlib"有误 |
+| `DuiLib/Control/UIImageBoxEx.cpp`（仅 `--no_imageboxex=y` 时） | 条件排除 | ATL 门控，见上方「构建门控」与 KNOWN_ISSUES #20 |
+| `DuiLib/Control/UIFlash.cpp`、`UIWebBrowser.cpp`（仅 `--no_activex=y` 时） | 条件排除 | 同上 |
+
+`3rd/` 目录与核心构建的关系分类（核心依赖 / 应用层自取 / 暂不迁移）
+见前文三张登记表，与此处排除清单互为补充：前者管"库在哪、谁用"，
+本节管"哪些文件不进核心编译单元"。
+
+
 
 | 目录 | 库 | 使用方 | 说明 |
 | --- | --- | --- | --- |

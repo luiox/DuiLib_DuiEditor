@@ -4,11 +4,8 @@
 -- * 本脚本只构建 DuiLib 核心库（Win32 后端），不含 DuiEditor / Demos / SDL 后端。
 -- * Linux/macOS 的 SDL 后端构建走 DuiLib/CMakeLists.txt（上游维护）。
 -- * 静态库使用方需自行定义 UILIB_STATIC（见 UIlib.h）。
--- * 排除项说明：
---   - *Sdl*.cpp：SDL 后端源码，其头文件在 #ifdef DUILIB_SDL 之前无条件包含 SDL 头，
---     非 SDL 构建必须整组排除（后端由 DUILIB_SDL 宏门控，Win32 路径不定义该宏）。
---   - Utils/unzip.cpp：依赖 zlib 的解压工具路径，宿主按需自带。
---   - Utils/UIDataExchange.cpp：依赖旧式数据绑定组件，宿主按需自带。
+-- * 排除项（remove_files）的完整清单、逐项理由与维护规则，
+--   以 3rd/README.md「构建排除清单（单一事实源）」为唯一权威，勿在此处另立清单。
 --
 -- * 第三方库：位于 3rd/（见 3rd/README.md 登记表）。pugixml 为独立编译
 --   单元（static target）；nanosvg / stb 仍为 header-only——*_IMPLEMENTATION
