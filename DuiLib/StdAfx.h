@@ -78,8 +78,10 @@
 #define CLAMP(x,a,b) (MIN(b,MAX(a,x)))
 
 //////////////////////////////////////////////////////////////////////////
-
-#define PUGIXML_HEADER_ONLY
+// pugixml：独立编译单元（3rd/pugixml/pugixml.cpp，根 xmake.lua target("pugixml")），
+// 此处仅引入声明，不再 HEADER_ONLY 内联进每个 TU。
+// 注意：_UNICODE 构建下 pugi 走 WCHAR_MODE，与 pugixml target 的
+// PUGIXML_WCHAR_MODE 编译宏必须一致（见根 xmake.lua）。
 #ifdef _UNICODE
 #define PUGIXML_WCHAR_MODE
 #endif

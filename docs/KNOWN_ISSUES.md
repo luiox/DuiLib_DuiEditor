@@ -168,14 +168,19 @@
 - 现状：`tests/test_invariant_nanosvg.h` 无 runner。
 - 建议：加一个最小 xmake test target（编译期断言或 gtest 单测），CI 里跑。
 
-### 19. pugixml.cpp 作为独立 TU 与 StdAfx 的 PUGIXML_HEADER_ONLY 冲突 [已修]
-- 位置：`DuiLib/StdAfx.h:82` 无条件 `#define PUGIXML_HEADER_ONLY`，
-  所有含 StdAfx.h 的 TU 内联一份 pugi 实现（inline COMDAT）；
-  `DuiLib/Utils/pugixml/pugixml.cpp` 独立编译时无此宏、产出强符号。
-- 现象：`add_files("DuiLib/**.cpp")` 类 glob 会把 pugixml.cpp 编进库——
-  shared 链接必 LNK2005/LNK1169；static 下也是一份冗余实现。
-- 修复：xmake.lua 排除 `DuiLib/Utils/pugixml/pugixml.cpp`。宿主侧以 glob
-  编源码时同样需要排除（mlaunch DuiLibLite 已同步）。
+### 19. pugixml header-only 全 TU 内联（#19） [已修 2026-09：转独立 TU]
+- 原状：`DuiLib/StdAfx.h` 无条件 `#define PUGIXML_HEADER_ONLY`，所有含
+  StdAfx.h 的 TU 内联一份 pugi 实现（inline COMDAT）——编译时间/体积税，
+  调试器里 pugixml 栈每 TU 一份；且 `pugixml.cpp` 若被 glob 编入会因
+  强符号冲突在 shared 链接 LNK2005/LNK1169。
+- 修复（2026-09 收口）：`StdAfx.h` 去掉 `PUGIXML_HEADER_ONLY`，只 include
+  `3rd/pugixml/pugixml.hpp` 引入声明；根 `xmake.lua` 的 `target("pugixml")`
+  改为 static，独立编译 `3rd/pugixml/pugixml.cpp`（`PUGIXML_WCHAR_MODE`
+  与 `_UNICODE` 头侧宏一致）。库文件零魔改，上游合并策略登记于
+  `3rd/README.md`。
+- 宿主注意：以 `DuiLib/**.cpp` glob 编源码的宿主（如 mlaunch
+  DuiLibLite）**必须同步编译 `3rd/pugixml/pugixml.cpp`**（此前
+  header-only 天然内联、无需此步），否则 pugi 符号无法解析。
 
 ### 20. 构建依赖 VS 的 ATL 组件（atlimage.h） [规避]
 - 位置：`DuiLib/Control/UIImageBoxEx.h`（经 UIlib.h 无条件包含）→ atlimage.h。

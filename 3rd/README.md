@@ -9,12 +9,22 @@
 
 | 目录 | 库 | 版本 | 接入方式 | target |
 | --- | --- | --- | --- | --- |
-| `pugixml/` | pugixml | 1.11 | header-only（StdAfx.h 全 TU 内联） | phony |
+| `pugixml/` | pugixml | 1.11 | **独立编译单元**：`pugixml.cpp` 由本 target 编译（`PUGIXML_WCHAR_MODE`），`StdAfx.h` 只 include 头 | static |
 | `nanosvg/` | nanosvg + raster | 上游 2013-14 快照 | header-only（IRender.cpp 单 TU 实现） | phony |
 | `stb/` | stb_image / stb_image_write | v2.28 / v1.16 | header-only（IRender.cpp 单 TU 实现） | phony |
 
-三个 target 均为 `phony`（纯依赖登记）：包含走源码内文件相对路径，
-target 的作用是把依赖关系显式化，为将来转编译 TU / 换标准包留接线位。
+pugixml 自 2026-09 起为独立 TU（`DuiLib/**.cpp` glob 不含它，实现不进
+DuiLib 库文件）；nanosvg/stb 仍为 `phony`（纯依赖登记）：包含走源码内
+文件相对路径，target 的作用是把依赖关系显式化，为将来转编译 TU / 换
+标准包留接线位。
+
+## 上游合并策略（各库一节，随差异登记更新）
+
+| 库 | 库文件魔改 | fork 侧偏移点（与上游/宿主合并时的全部触点） |
+| --- | --- | --- |
+| `pugixml/` | **零魔改**（仅 UTF-8 BOM，见 `pugixml/LOCAL_CHANGES.md`） | ① `DuiLib/StdAfx.h` 接入段（去 `PUGIXML_HEADER_ONLY`，约 5 行）；② 根 `xmake.lua` `target("pugixml")`（static + `PUGIXML_WCHAR_MODE`）。库文件可整体替换为上游版本 |
+| `nanosvg/` | **memcpy 边界检查修复**（上游 DuiLib 仓库 PR#11 继承，见 `nanosvg/LOCAL_CHANGES.md`） | `Render/IRender.cpp` 的 `NANOSVG*_IMPLEMENTATION` 单 TU 接入段 |
+| `stb/` | 零魔改（仅 UTF-8 BOM） | 同上（`STB_IMAGE*_IMPLEMENTATION` 单 TU 接入段） |
 
 ## 已在本目录、但核心库不依赖（应用层自取）
 
@@ -34,3 +44,7 @@ target 的作用是把依赖关系显式化，为将来转编译 TU / 换标准�
 
 - 2026-08：pugixml / nanosvg / stb 自 `DuiLib/Utils/` 迁入（PR #3，
   issue #2）。此前 `3rd/SDL*`、`CxImage`、`scintilla` 为上游原有布局。
+- 2026-09：pugixml 由 header-only（StdAfx.h 全 TU 内联）转为独立编译
+  单元（本目录 `pugixml.cpp` 经根 `xmake.lua` target 编译）。**宿主以
+  glob 方式编 DuiLib 源码的，必须同步编译 `3rd/pugixml/pugixml.cpp`**，
+  详见 `pugixml/LOCAL_CHANGES.md`。

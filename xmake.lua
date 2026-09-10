@@ -10,12 +10,9 @@
 --   - Utils/unzip.cpp：依赖 zlib 的解压工具路径，宿主按需自带。
 --   - Utils/UIDataExchange.cpp：依赖旧式数据绑定组件，宿主按需自带。
 --
--- * 第三方库：位于 3rd/（见 3rd/README.md）。核心实际使用的三个
---   （pugixml / nanosvg / stb）均为 header-only 接入方式——pugixml 由
---   StdAfx.h 无条件 #define PUGIXML_HEADER_ONLY 后内联进每个 TU，
---   nanosvg/stb 的 *_IMPLEMENTATION 均集中在 Render/IRender.cpp 单 TU，
---   故以 headeronly target 登记（依赖关系显式化，且不改变既有包含路径
---   语义：源码经文件相对路径引用 3rd/ 头）。
+-- * 第三方库：位于 3rd/（见 3rd/README.md 登记表）。pugixml 为独立编译
+--   单元（static target）；nanosvg / stb 仍为 header-only——*_IMPLEMENTATION
+--   集中在 Render/IRender.cpp 单 TU，phony target 仅登记依赖关系。
 
 set_project("DuiLib_DuiEditor")
 set_version("1.1.0")
@@ -29,10 +26,14 @@ option("kind")
     set_showmenu("target kind: static(default) or shared")
 option_end()
 
--- 第三方库 target（header-only 登记，用法与差异见各目录 LOCAL_CHANGES.md）
--- 第三方库 target（登记依赖关系；header-only 用法见各目录 LOCAL_CHANGES.md）
+-- 第三方库 target（用法与差异见各目录 LOCAL_CHANGES.md；排除纪律以 3rd/README.md 为单一事实源）
+-- pugixml：独立编译单元（pugixml.cpp 由此 target 编译，DuiLib/StdAfx.h 只 include 头）。
+--   PUGIXML_WCHAR_MODE 必须与 StdAfx.h 的 _UNICODE 条件宏一致——本仓 DuiLib target
+--   恒定 UNICODE/_UNICODE，故此处无条件定义。
 target("pugixml")
-    set_kind("phony")
+    set_kind("static")
+    add_files("3rd/pugixml/pugixml.cpp")
+    add_defines("PUGIXML_WCHAR_MODE")
     add_headerfiles("3rd/pugixml/*.hpp")
 target_end()
 
