@@ -27,6 +27,13 @@ jobs:
       - name: build
         run: xmake -y
 
+      # 测试门（KNOWN_ISSUES #18）：duilib_test 仅在 static 配置下存在
+      # （nanosvg/stb 实现位于 IRender.cpp 单 TU 且不经 DLL 导出），
+      # shared 矩阵跳过属预期。
+      - name: test
+        if: matrix.kind == 'static'
+        run: xmake run duilib_test
+
       - name: locate lib
         id: lib
         shell: pwsh
