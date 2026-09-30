@@ -40,6 +40,9 @@ namespace DuiLib {
 
 		// Position the popup window in absolute space
 		CDuiSize szDrop = m_pOwner->GetDropBoxSize();
+		// KNOWN_ISSUES #25: GetDropBoxSize 恒存逻辑值,而 rc 的其余部分来自
+		// 宿主控件的物理像素坐标,统一按宿主 DPI 缩放后窗口尺寸才与内容一致
+		m_pOwner->GetManager()->GetDPIObj()->ScaleSize(&szDrop);
 		CDuiRect rcOwner = pOwner->GetPos();
 		CDuiRect rc = rcOwner;
 		rc.top = rc.bottom;		// 父窗口left、bottom位置作为弹出窗口起点
@@ -55,6 +58,8 @@ namespace DuiLib {
 			cyFixed += sz.cy;
 		}
 		cyFixed += 4;
+		// 同上:EstimateSize 累计的是逻辑值,与缩放后的 szDrop 同口径再比较
+		cyFixed = m_pOwner->GetManager()->GetDPIObj()->ScaleInt(cyFixed);
 		rc.bottom = rc.top + MIN(cyFixed, szDrop.cy);
 
 		::MapWindowRect(pOwner->GetManager()->GetPaintWindow(), HWND_DESKTOP, &rc);
@@ -117,6 +122,11 @@ namespace DuiLib {
 		if( uMsg == WM_CREATE ) {
 			m_pm.SetForceUseSharedRes(true);
 			m_pm.Init(m_hWnd, NULL, this);
+			// KNOWN_ISSUES #25: 弹窗 manager 与宿主同 DPI(菜单弹窗
+			// UIMenuWndWin32.cpp:215 已是此模式)。不走 SetDPI 的整窗缩放
+			// 分支——窗口 rect 已按宿主物理像素定位,只需内容按同 scale 布局;
+			// 字体在 _buildFont 时按此 scale 构建,无需 ResetDPIAssets。
+			m_pm.GetDPIObj()->SetScale(m_pOwner->GetManager()->GetDPIObj()->GetDPI());
 			// The trick is to add the items to the new container. Their owner gets
 			// reassigned by this operation - which is why it is important to reassign
 			// the items back to the righfull owner/manager when the window closes.
