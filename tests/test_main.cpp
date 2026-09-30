@@ -293,9 +293,10 @@ static void test_dpi_default_font_not_prescaled()
 		   "</VerticalLayout>"),
 		NULL, NULL, &pm, NULL);
 	CHECK(pRoot != NULL);
-	if (pRoot != NULL)
-		pm.AttachDialog(pRoot);
-
+	// 注意：不走 pm.AttachDialog(pRoot)——其中 ASSERT(IsWindow()) 对 headless
+	// 管理器恒假，debug CRT(_ASSERTE)默认弹窗会让进程挂死（CI debug/static
+	// 矩阵实测挂死 15min+）。_Parse 侧 SetManager(..., bInit=false) 不注册
+	// 所有权，manager 析构不涉及 pRoot，此处手动 delete。
 	UIFont* pDef = pm.GetDefaultFontInfo();
 	CHECK(pDef != NULL);
 	if (pDef != NULL)
@@ -305,6 +306,9 @@ static void test_dpi_default_font_not_prescaled()
 	CHECK(pF0 != NULL);
 	if (pF0 != NULL)
 		CHECK(pF0->GetSize() == 12);
+
+	if (pRoot != NULL)
+		delete pRoot;
 }
 
 int main()
