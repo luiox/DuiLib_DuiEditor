@@ -23,12 +23,15 @@
   "向外拖大时新区域不显示"）。现锁定期仅对新暴露条带补底送显，不重绘控件、
   不重排的去闪烁策略不变。
 
-### 3. `CControlUI::NeedUpdate` 对不可见控件直接早退 [待修]
-- 位置：`DuiLib/Core/UIControl.cpp:1069`
+### 3. `CControlUI::NeedUpdate` 对不可见控件直接早退 [已修 2026-09]
+- 位置：`DuiLib/Core/UIControl.cpp` `NeedUpdate`
 - 现象：`NeedUpdate()` 开头 `if(!IsVisible()) return;`——控件在隐藏状态下被
   标记更新会被丢弃，之后 `SetVisible(true)` 若无显式 NeedUpdate 不会重绘。
   宿主被迫在显隐切换处手工 `GetRoot()->NeedUpdate()`。
-- 建议方案：不可见时仍置 `m_bUpdateNeeded = true`，仅跳过 Invalidate。
+- 修复：不可见时仍置 `m_bUpdateNeeded = true`，仅跳过 Invalidate 与
+  manager 级通知；显示时经 `SetVisible→NeedParentUpdate` 链触发重绘，
+  置位标记由 OnPaint 的 update 分支兑现。
+- 回归门：`test_needupdate_while_hidden`（隐藏期置位断言，修复前为 false）。
 
 ### 4. 部分更新（partial update）路径依赖陈旧 m_rcItem [规避]
 - 位置：`OnPaint` 的 `__FindControlsFromUpdate` 单控件分支
@@ -132,23 +135,32 @@
 
 ## 控件属性 / API
 
-### 12. CButtonUI 不支持 normalbkcolor/hotbkcolor/pushedbkcolor [待修]
-- 位置：`DuiLib/Control/UIButton.cpp:247` `SetAttribute`
-- 现象：属性被静默忽略（落 CLabelUI），按钮无底色/悬停态。XML 里写了不报错，
-  极易误用。
-- 建议方案：SetAttribute 增加三态底色 + PaintStatusImage 自绘纯色
-  （宿主 appui::ButtonUI 已验证该实现，可直接下沉入库）。
+### 12. CButtonUI 不支持 normalbkcolor/hotbkcolor/pushedbkcolor [误诊更正 + 别名 2026-09]
+- 原登记（按 `UIButton.cpp:247` SetAttribute 判断三态底色被静默忽略）经复查
+  **不成立**：`hotbkcolor`/`pushedbkcolor` 在 `CControlUI::SetAttribute`
+  （UIControl.cpp）本就解析为 `SetHotBkColor/SetPushedBkColor`，且
+  `PaintBkColor` 有完整的 disabled→select→pushed→hot→focus→bkcolor 状态
+  回退链——按钮三态底色一直可用。
+- 真实缺口仅 `normalbkcolor` 这个属性名不存在（normal 态底色本库语义即
+  `bkcolor`），写了会被静默忽略、极易误用。
+- 修复：`CControlUI::SetAttribute` 增加 `normalbkcolor` → `SetBkColor`
+  别名（与既有 `bkcolor1` 别名同法）。
+- 回归门：`test_button_state_bkcolor_attrs`（三属性解析断言）。
 
 ### 13. CCheckBoxUI 视觉态依赖图片资源 [待修]
 - 现象：无 selectedstateimage 等资源时复选框无可见勾选态。
 - 建议方案：无图片时回退自绘（边框 + 对勾），与 #12 一并处理。
 
-### 14. `WindowImplBase::MessageHandler` 是死代码 [待修/兼容性]
-- 位置：`DuiLib/Utils/WinImplBase.cpp:64`
-- 现象：真实消息链是 `HandleMessage → (switch→OnXxx) → HandleCustomMessage
-  (:402) → m_pm.MessageHandler(:405)`，`MessageHandler` 永远不会被调用。
-  按原版 DuiLib 文档/习惯重写它的人会静默失效。
-- 建议方案：HandleMessage 链中调用 MessageHandler，或删除该方法避免误导。
+### 14. `WindowImplBase::MessageHandler` 是死代码 [已修 2026-09：链路接通]
+- 位置：`DuiLib/Utils/WinImplBase.cpp` `HandleMessage`
+- 现象：真实消息链是 `HandleMessage → (switch→OnXxx) → HandleCustomMessage →
+  m_pm.MessageHandler`，`MessageHandler` 永远不会被调用。按原版 DuiLib
+  文档/习惯重写它的人会静默失效。
+- 修复：HandleMessage 链中、HandleCustomMessage 之后接通
+  `MessageHandler`（默认实现处理 WM_KEYDOWN 的 RETURN/ESC →
+  ResponseDefaultKeyEvent）。已自行在 HandleCustomMessage 拦截按键的
+  宿主行为不变（其先行）；此前依赖"重写了但从未生效"现状的宿主会
+  开始触发其重写体——升级注意点。
 
 ## 构建 / 工程
 
@@ -284,12 +296,19 @@
   `DUIImageBase` 的 `m_mapDpiImageInfo[scale]` 分档缓存，SVG 不缓存直接
   渲染）；位图维持 `@N` 约定即可。
 
-### 25. 弹出窗口 DPI 传递无内部链路 [待修/待实测]
-- 位置：`DuiLib/Control/UIMenuWndWin32.cpp` / `UIMenuWndSdl.cpp` 的
-  `setDPI(int)`（库内无调用方）；`UIComboWndWin32` / `UIDateTimeWndWin32`
-  连 DPI 入口都没有（已核实无 setDPI 定义）。
-- 现象：弹窗各自新建 manager，`GetDPIObj` 懒创建默认 100%；宿主不手动调
-  `setDPI`，则 >100% 主屏上菜单按 96 DPI 布局，与主窗不匹配。
-- 建议：弹窗 Init 时从所属 manager 或
-  `GetDPIOfMonitorNearestToPoint`（弹锚点）取 DPI 同步，一处最小 diff。
-- 待实测：HiDPITest 验证窗内开菜单确认症状后收口。
+### 25. 弹出窗口 DPI 传递无内部链路 [已修 2026-09：范围更正为 Combo]
+- 原登记经复查更正：
+  - **菜单弹窗本就同步**——`CMenuWndWin32` 两条创建路径在 `m_pm.Init` 后
+    均 `m_pm.GetDPIObj()->SetScale(宿主 DPI)`（UIMenuWndWin32.cpp:215/251），
+    公开的 `setDPI(int)` 方法确无调用方但属冗余 API，非缺陷；
+  - **DateTime 弹窗不适用**——`CDateTimeWndWin32` 是原生
+    SysDateTimePick32 包装（DATETIMEPICK_CLASS），无 duilib manager；
+  - **Combo 下拉确认缺失**：`CComboWndWin32` manager 默认 100%。
+- 修复（`UIComboWndWin32.cpp`）：
+  ① WM_CREATE 中 `m_pm.Init` 后 `SetScale(宿主 DPI)`——与菜单同模式，
+    不走 SetDPI 整窗缩放分支（窗口 rect 已按宿主物理像素定位），
+    字体在 `_buildFont` 时按新 scale 构建；
+  ② `Init` 的 `GetDropBoxSize`（逻辑值）与 EstimateSize 累计的
+    `cyFixed` 按宿主 DPI 缩放——修复前下拉窗口高度恒为逻辑像素，
+    >100% 主屏上内容超高被裁进滚动条。
+- 验证：HiDPITest 200% 主屏下拉 Combo，下拉框高度与条目随宿主缩放。

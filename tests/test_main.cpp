@@ -311,6 +311,55 @@ static void test_dpi_default_font_not_prescaled()
 		delete pRoot;
 }
 
+// 10. KNOWN_ISSUES #3:NeedUpdate 在控件隐藏期间置位不丢失,修复前早退
+//     整个丢弃 → SetVisible(true) 后无显式 NeedUpdate 不重绘。
+static void test_needupdate_while_hidden()
+{
+	CPaintManagerWin32UI pm;
+	CDialogBuilder builder;
+	CControlUI* pRoot = builder.Create(
+		_T("<VerticalLayout name='root'>"
+		   "<Label name='l' text='x' width='100' height='30'/>"
+		   "</VerticalLayout>"),
+		NULL, NULL, &pm, NULL);
+	CHECK(pRoot != NULL);
+	// 包装节点约定:builder 返回值即第一个子元素(此处就是名字为 l 的 Label);
+	// 不走 AttachDialog(见 test_dpi_default_font_not_prescaled 的注释),
+	// manager 名字哈希也未注册,直接用返回指针。
+	CControlUI* pLabel = pRoot;
+	if (pLabel != NULL) {
+		pLabel->SetVisible(false);
+		pLabel->NeedUpdate();
+		CHECK(pLabel->IsUpdateNeeded());	// 修复前为 false(早退丢弃)
+		pLabel->SetVisible(true);			// NeedParentUpdate 链在无窗口下安全
+		pLabel->NeedUpdate();
+		CHECK(pLabel->IsUpdateNeeded());
+	}
+	if (pRoot != NULL) delete pRoot;
+}
+
+// 11. KNOWN_ISSUES #12:normalbkcolor 别名解析(此前静默忽略);
+//     hotbkcolor/pushedbkcolor 经状态链本就支持(登记误诊更正)。
+static void test_button_state_bkcolor_attrs()
+{
+	CPaintManagerWin32UI pm;
+	CDialogBuilder builder;
+	CControlUI* pRoot = builder.Create(
+		_T("<VerticalLayout name='root'>"
+		   "<Button name='b' text='b' width='100' height='30'"
+		   " normalbkcolor='#FF112233' hotbkcolor='#FF445566' pushedbkcolor='#FF778899'/>"
+		   "</VerticalLayout>"),
+		NULL, NULL, &pm, NULL);
+	CHECK(pRoot != NULL);
+	CControlUI* pBtn = pRoot;	// 同上:builder 返回值即该 Button 本身
+	if (pBtn != NULL) {
+		CHECK((DWORD)pBtn->GetBkColor() == 0xFF112233);		// normalbkcolor 别名
+		CHECK((DWORD)pBtn->GetHotBkColor() == 0xFF445566);
+		CHECK((DWORD)pBtn->GetPushedBkColor() == 0xFF778899);
+	}
+	if (pRoot != NULL) delete pRoot;
+}
+
 int main()
 {
 	wprintf(L"== duilib_test (3rd extraction regression gate) ==\n");
@@ -324,6 +373,8 @@ int main()
 	RUN_TEST(test_stb_png_roundtrip);
 	RUN_TEST(test_dpi_scale_roundtrip);
 	RUN_TEST(test_dpi_default_font_not_prescaled);
+	RUN_TEST(test_needupdate_while_hidden);
+	RUN_TEST(test_button_state_bkcolor_attrs);
 
 	wprintf(L"== %d passed, %d failed ==\n", g_passed, g_failed);
 	return g_failed == 0 ? 0 : 1;
