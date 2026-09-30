@@ -1068,8 +1068,12 @@ namespace DuiLib {
 
 	void CControlUI::NeedUpdate()
 	{
-		if( !IsVisible() ) return;
+		// 隐藏期间仅记账不无效化(KNOWN_ISSUES #3):修复前早退会把隐藏期的
+		// 更新标记整个丢弃,SetVisible(true) 后无显式 NeedUpdate 不重绘。
+		// 显示时由 SetVisible→NeedParentUpdate 链触发重绘,置位的标记
+		// 经 OnPaint 的 update 分支兑现。
 		m_bUpdateNeeded = true;
+		if( !IsVisible() ) return;
 		Invalidate();
 
 		if( m_pManager != NULL ) m_pManager->NeedUpdate();
@@ -1455,6 +1459,10 @@ namespace DuiLib {
 		}
 		else if (_tcsicmp(pstrName, _T("bkcolor")) == 0)			SetBkColor(pstrValue);
 		else if (_tcsicmp(pstrName, _T("bkcolor1")) == 0)			SetBkColor(pstrValue);
+		// normalbkcolor 别名(#12):本库 normal 态底色即 bkcolor,该名字此前
+		// 不存在会被静默忽略;hotbkcolor/pushedbkcolor 经状态链本就支持,
+		// 见 PaintBkColor 的 disabled→select→pushed→hot→focus→bkcolor 回退
+		else if (_tcsicmp(pstrName, _T("normalbkcolor")) == 0)		SetBkColor(pstrValue);
 		else if( _tcsicmp(pstrName, _T("bkcolor2")) == 0 )			SetBkColor2(pstrValue);
 		else if( _tcsicmp(pstrName, _T("bkcolor3")) == 0 )			SetBkColor3(pstrValue);
 		else if( _tcsicmp(pstrName, _T("hotbkcolor")) == 0 )		SetHotBkColor(pstrValue);

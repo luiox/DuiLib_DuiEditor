@@ -402,6 +402,14 @@ namespace DuiLib
 		lRes = HandleCustomMessage(uMsg, wParam, lParam, bHandled);
 		if (bHandled) return lRes;
 
+		// KNOWN_ISSUES #14: MessageHandler 原本位于此链之外永不执行(死代码),
+		// 按上游文档语义在此接通——默认实现处理 WM_KEYDOWN 的 RETURN/ESC
+		// (ResponseDefaultKeyEvent),宿主重写 MessageHandler 自此生效;
+		// 已自行在 HandleCustomMessage 拦截按键的宿主行为不变(其先行)。
+		bool bMsgHandled = false;
+		lRes = MessageHandler(uMsg, wParam, lParam, bMsgHandled);
+		if (bMsgHandled) return lRes;
+
 		if (m_pm.MessageHandler(uMsg, wParam, lParam, lRes))
 			return lRes;
 		return ::CallWindowProc(m_OldWndProc, m_hWnd, uMsg, wParam, lParam);
