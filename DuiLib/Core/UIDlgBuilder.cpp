@@ -98,7 +98,10 @@ namespace DuiLib {
 					if( id >= 0 ) 
 					{
 						pManager->AddFont(id, pFontName, size, bold, underline, italic, shared);
-						if( defaultfont ) pManager->SetDefaultFont(pFontName, pManager->GetDPIObj()->ScaleInt(size), bold, underline, italic, shared);
+						// iSize 恒存 96 DPI 逻辑值（与 AddFont 路径一致），构建时由
+						// _buildFont 统一 ScaleInt——此处预缩放会与 _buildFont 叠加成双倍缩放
+						// （KNOWN_ISSUES #22）
+						if( defaultfont ) pManager->SetDefaultFont(pFontName, size, bold, underline, italic, shared);
 					}
 				}
 				else if( _tcsicmp(pstrClass, _T("Default")) == 0 ) 

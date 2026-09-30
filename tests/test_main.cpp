@@ -13,7 +13,9 @@
 //   5.   控件工厂（ATL 门控下注册集合变化的行为面）；
 //   6.   nanosvg 解析（含原 tests/test_invariant_nanosvg.h 的
 //        gradient-stops 不变量移植）；
-//   7.   stb PNG 写入/读回内存回路（实现位于 Render/IRender.cpp 单 TU）。
+//   7.   stb PNG 写入/读回内存回路（实现位于 Render/IRender.cpp 单 TU）；
+//   8.   DPI 缩放/回缩往返不变量（CDpiBase，scale>=100 恒等）；
+//   9.   XML <Font default> 不预缩放（KNOWN_ISSUES #22 回归门）。
 
 #define UILIB_STATIC
 #include "../DuiLib/UIlib.h"
@@ -247,6 +249,64 @@ static void test_stb_png_roundtrip()
 		free(png);
 }
 
+// 8. DPI：缩放/回缩往返不变量。MulDiv 上/下两方向均为四舍五入，scale>=100
+//    （DPI>=96）时往返偏差 <0.5 逻辑像素，恒等成立；scale<100（降档）不保证
+//    （MulDiv(2,100,75)=3），是 KNOWN_ISSUES #23 引入 ScaleVerify 校验的依据。
+static void test_dpi_scale_roundtrip()
+{
+	static const UINT kDpis[] = { 96, 120, 144, 168, 192, 240 };
+	CDpiBase dpi;
+	for (int d = 0; d < (int)(sizeof(kDpis) / sizeof(kDpis[0])); ++d) {
+		dpi.SetScale(kDpis[d]);
+		CHECK((int)dpi.GetScale() == MulDiv(kDpis[d], 100, 96));
+		CHECK((int)dpi.GetDPI() == (int)kDpis[d]);
+
+		int bad = 0;
+		for (int x = 0; x <= 2000; ++x) {
+			if (dpi.ScaleIntBack(dpi.ScaleInt(x)) != x)
+				++bad;
+		}
+		CHECK(bad == 0);
+
+		CDuiRect rc(13, 17, 13 + 123, 17 + 77);
+		RECT r = { rc.left, rc.top, rc.right, rc.bottom };
+		dpi.ScaleRect(&r);
+		dpi.ScaleRectBack(&r);
+		CHECK(r.left == 13 && r.top == 17 && r.right == 13 + 123 && r.bottom == 17 + 77);
+	}
+}
+
+// 9. DPI：XML <Font default="true"> 的字号必须存 96 DPI 逻辑值，不得在
+//    builder 侧预缩放（KNOWN_ISSUES #22）。修复前：UIDlgBuilder 先 ScaleInt
+//    再 SetDefaultFont，_buildFont 构建时又 ScaleInt → 150% 下默认字体双倍
+//    大小（此处断言 144 DPI 下 iSize==12，修复前为 18）。
+static void test_dpi_default_font_not_prescaled()
+{
+	CPaintManagerWin32UI pm;
+	pm.GetDPIObj()->SetScale(144);	// 150%
+
+	CDialogBuilder builder;
+	CControlUI* pRoot = builder.Create(
+		_T("<VerticalLayout name='root'>"
+		   "<Font id='0' name='Arial' size='12' default='true'/>"
+		   "<Label name='l' text='x' width='100' height='30'/>"
+		   "</VerticalLayout>"),
+		NULL, NULL, &pm, NULL);
+	CHECK(pRoot != NULL);
+	if (pRoot != NULL)
+		pm.AttachDialog(pRoot);
+
+	UIFont* pDef = pm.GetDefaultFontInfo();
+	CHECK(pDef != NULL);
+	if (pDef != NULL)
+		CHECK(pDef->GetSize() == 12);
+
+	UIFont* pF0 = pm.GetFont(0);
+	CHECK(pF0 != NULL);
+	if (pF0 != NULL)
+		CHECK(pF0->GetSize() == 12);
+}
+
 int main()
 {
 	wprintf(L"== duilib_test (3rd extraction regression gate) ==\n");
@@ -258,6 +318,8 @@ int main()
 	RUN_TEST(test_nanosvg_parse);
 	RUN_TEST(test_nanosvg_gradient_stops_invariant);
 	RUN_TEST(test_stb_png_roundtrip);
+	RUN_TEST(test_dpi_scale_roundtrip);
+	RUN_TEST(test_dpi_default_font_not_prescaled);
 
 	wprintf(L"== %d passed, %d failed ==\n", g_passed, g_failed);
 	return g_failed == 0 ? 0 : 1;
