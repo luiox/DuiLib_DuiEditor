@@ -360,6 +360,16 @@ static void test_button_state_bkcolor_attrs()
 	if (pRoot != NULL) delete pRoot;
 }
 
+// #23-④:初始 DPI opt-in 开关默认关闭;setter 返回旧值
+static void test_setinitdpi_flag()
+{
+	CHECK(CPaintManagerUI::IsInitDPIFromMonitor() == false);
+	CHECK(CPaintManagerUI::SetInitDPIFromMonitor(true) == false);	// 旧值 false
+	CHECK(CPaintManagerUI::IsInitDPIFromMonitor() == true);
+	CHECK(CPaintManagerUI::SetInitDPIFromMonitor(false) == true);	// 恢复,返回旧值 true
+	CHECK(CPaintManagerUI::IsInitDPIFromMonitor() == false);
+}
+
 int main()
 {
 	wprintf(L"== duilib_test (3rd extraction regression gate) ==\n");
@@ -375,6 +385,7 @@ int main()
 	RUN_TEST(test_dpi_default_font_not_prescaled);
 	RUN_TEST(test_needupdate_while_hidden);
 	RUN_TEST(test_button_state_bkcolor_attrs);
+	RUN_TEST(test_setinitdpi_flag);
 
 	wprintf(L"== %d passed, %d failed ==\n", g_passed, g_failed);
 	return g_failed == 0 ? 0 : 1;

@@ -15,13 +15,18 @@ xmake run duilib_hidpi
   遍历根元素的子元素，**第一个子元素**才是窗口根控件，其余兄弟节点被
   丢弃；根元素自身的属性（如 bkcolor）也被忽略。实测踩坑记录（表现为
   全黑窗口 + 只有一行文字）。
-- `/nodpi` 诊断开关：`duilib_hidpi.exe /nodpi` 跳过基类 `Create` 末尾的
-  `SetDPI(主屏 DPI)`，用于区分"DPI 初始化问题"与"绘制链路问题"
-  （实测两者均正常，黑屏为上述 XML 约定踩坑）。
-- 窗口派生自 `CFrameWnd`（`CUIFrameWndWin32`）一族，初始 DPI 与
-  `WM_DPICHANGED` 均由基类处理（对照 KNOWN_ISSUES #23 记录的覆盖范围：
-  非 CFrameWnd 窗口不在此列）。
-- 进程级 DPI 感知由本 Demo 在首个窗口前显式 `SetDPIAwareness`
-  （KNOWN_ISSUES #23-④：库不代调，宿主职责）。
+- `/nodpi` 诊断开关：`duilib_hidpi.exe /nodpi` 关闭 #23-④ opt-in（库内
+  创建期一切 DPI 干预跳过、基类主屏兜底也不做），用于区分"DPI 初始化
+  问题"与"绘制链路问题"。
+- 本 demo 即 KNOWN_ISSUES #23 修复后的宿主接入两行示例：首个窗口前
+  `CPaintManagerUI::EnablePerMonitorDPIAwareness()`（进程级 Per-Monitor
+  感知）+ `CPaintManagerUI::SetInitDPIFromMonitor(true)`（窗口初建即按
+  所在显示器取 DPI 并同步放大窗口物理尺寸，先于皮肤解析/首次布局）。
+  `WM_DPICHANGED` 跨屏变化由 `CPaintManagerUI::MessageHandler` 统一处理
+  （采用系统建议矩形），任何接通 m_pm 消息链的窗口都自动受益；运行时
+  切换仍可用窗口上的 DPI 按钮组。
+- 注意：`WM_DPICHANGED` 是系统专用消息，`PostMessage`/`SendMessage`
+  手工投递一律失败（实测同进程也返回 0）——链路只能靠真实跨屏拖动或
+  系统改 DPI 触发，无法脚本注入验证。
 - 不进默认构建（`set_default(false)`），经根 `xmake.lua` 的
   `includes("Demos/HiDPITest/xmake.lua")` 接入，仅 Win32 后端。

@@ -536,6 +536,15 @@ namespace DuiLib {
 		CDPI* GetDPIObj();
 		void ResetDPIAssets();
 		virtual void SetDPI(int iDPI);
+		// #23-② WM_DPICHANGED 专用:pSuggestedRect 为系统建议矩形(屏幕坐标),
+		// 混合 DPI 多屏间比"窗口尺寸×比例"更可靠;普通 SetDPI 等价于传 NULL
+		void SetDPI(int iDPI, const CDuiRect* pSuggestedRect);
+		// #23-④ opt-in:窗口初建时按所在显示器 DPI 初始化(默认关闭,不影响既有宿主)
+		static bool SetInitDPIFromMonitor(bool bAuto = true);
+		static bool IsInitDPIFromMonitor() { return m_bInitDPIFromMonitor; }
+		// #23-⑤ 进程级 Per-Monitor DPI Aware 一站式入口(须在任何窗口创建前调用;
+		// 非 Win32 平台恒返回 false)
+		static bool EnablePerMonitorDPIAwareness();
 		static void SetAllDPI(int iDPI);
 
 		static bool TranslateMessage(const LPMSG pMsg);
@@ -725,6 +734,7 @@ namespace DuiLib {
 		static short m_L;
 		static CStdPtrArray m_aPreMessages;
 		static CStdPtrArray m_aPlugins;
+		static bool m_bInitDPIFromMonitor;	// #23-④ 初始 DPI 取窗口所在显示器(默认 false)
 
 	public: 
 		CLangManagerUI *GetLangManager() { return m_pLangManager; }

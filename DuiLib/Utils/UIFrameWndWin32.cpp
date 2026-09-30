@@ -19,7 +19,10 @@ UIWND CUIFrameWndWin32::Create(UIWND hwndParent, LPCTSTR pstrName, DWORD dwStyle
 	UIWND hWnd = CWindowWin32::Create(hwndParent, pstrName, dwStyle, dwExStyle, x, y, cx, cy);
 	if(hWnd != NULL)
 	{
-		GetManager()->SetDPI(GetManager()->GetDPIObj()->GetMainMonitorDPI());
+		// #23-④:开启"初始 DPI 取窗口所在显示器"后,Init 阶段已按所在屏设定,不再以主屏覆盖;
+		//未开启时保持原行为——按主显示器 DPI 初始化
+		if( !CPaintManagerUI::IsInitDPIFromMonitor() )
+			GetManager()->SetDPI(GetManager()->GetDPIObj()->GetMainMonitorDPI());
 	}
 	return hWnd;
 }

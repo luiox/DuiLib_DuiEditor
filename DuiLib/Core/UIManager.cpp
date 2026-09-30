@@ -28,6 +28,7 @@ namespace DuiLib {
 	short CPaintManagerUI::m_L = 100;
 	CStdPtrArray CPaintManagerUI::m_aPreMessages;
 	CStdPtrArray CPaintManagerUI::m_aPlugins;
+	bool CPaintManagerUI::m_bInitDPIFromMonitor = false;	// #23-④ 默认关闭,保持既有宿主行为
 	CStdPtrArray CPaintManagerUI::m_aFontFiles;
 
 	uiBool CPaintManagerUI::UIDESIGNMODE = uiFalse;
@@ -959,6 +960,14 @@ namespace DuiLib {
 
 	void DuiLib::CPaintManagerUI::SetDPI(int iDPI)
 	{
+		SetDPI(iDPI, NULL);
+	}
+
+	// #23-② pSuggestedRect:WM_DPICHANGED 的 lParam 建议矩形(屏幕坐标)。
+	// 混合 DPI 多屏间拖动时,系统按新旧 DPI 折算的目标矩形比"窗口尺寸×比例"更可靠;
+	// 最大化窗口仍交给系统(与原逻辑一致,忽略建议矩形)。
+	void DuiLib::CPaintManagerUI::SetDPI(int iDPI, const CDuiRect* pSuggestedRect)
+	{
 		int scale1 = GetDPIObj()->GetScale();
 		GetDPIObj()->SetScale(iDPI);
 		int scale2 = GetDPIObj()->GetScale();
@@ -966,16 +975,44 @@ namespace DuiLib {
 		CDuiRect rcWnd;
 		GetWindowRect(&rcWnd);
 		CDuiRect*  prcNewWindow = &rcWnd;
-		if (!IsZoomed()) 
+		if (!IsZoomed())
 		{
-			CDuiRect rc = rcWnd;
-			rc.right = rcWnd.left + (rcWnd.right - rcWnd.left) * scale2 / scale1;
-			rc.bottom = rcWnd.top + (rcWnd.bottom - rcWnd.top) * scale2 / scale1;
-			prcNewWindow = &rc;
+			if (pSuggestedRect != NULL) {
+				rcWnd = *pSuggestedRect;
+			}
+			else {
+				CDuiRect rc = rcWnd;
+				rc.right = rcWnd.left + (rcWnd.right - rcWnd.left) * scale2 / scale1;
+				rc.bottom = rcWnd.top + (rcWnd.bottom - rcWnd.top) * scale2 / scale1;
+				prcNewWindow = &rc;
+			}
 		}
 		SetWindowPos(prcNewWindow->left, prcNewWindow->top, prcNewWindow->right - prcNewWindow->left, prcNewWindow->bottom - prcNewWindow->top, SWP_NOZORDER | SWP_NOACTIVATE);
 		if (GetRoot() != NULL) GetRoot()->NeedUpdate();
 		PostMessage(UIMSG_SET_DPI, 0, 0);
+	}
+
+	// #23-④ 返回旧值,便于宿主临时开关
+	bool DuiLib::CPaintManagerUI::SetInitDPIFromMonitor(bool bAuto)
+	{
+		bool bOld = m_bInitDPIFromMonitor;
+		m_bInitDPIFromMonitor = bAuto;
+		return bOld;
+	}
+
+	// #23-⑤ 幂等;进程感知已被清单或先行调用设定时 SetProcessDpiAwareness 会失败,
+	// 此时返回 false——宿主应以自身清单为准
+	bool DuiLib::CPaintManagerUI::EnablePerMonitorDPIAwareness()
+	{
+#ifdef DUILIB_WIN32
+		static bool s_bEnabled = false;
+		if (s_bEnabled) return true;
+		CDpiWin32 dpi;
+		s_bEnabled = (dpi.SetDPIAwareness(PROCESS_PER_MONITOR_DPI_AWARE) != 0);
+		return s_bEnabled;
+#else
+		return false;
+#endif
 	}
 
 	void DuiLib::CPaintManagerUI::SetAllDPI(int iDPI)
@@ -2631,7 +2668,14 @@ namespace DuiLib {
 				break;
 			case WM_PRINTCLIENT:
 				return false;
-				return OnPrintClient(wParam, lParam, lRes);
+				return OnPrintClient(wParam, lParam, lRes); //预留，不调用
+				break;
+			case WM_DPICHANGED:
+				// #23-② manager 层统一接住跨屏 DPI 变化,采用系统建议矩形;
+				// 宿主仍可在 HandleCustomMessage 先行拦截,UIMSG_SET_DPI 供界面刷新
+				SetDPI(LOWORD(wParam), reinterpret_cast<const CDuiRect*>(lParam));
+				lRes = 0;
+				return true;
 				break;
 			case WM_GETMINMAXINFO:
 				return OnGetMaxMinInfo(wParam, lParam, lRes);
