@@ -87,8 +87,9 @@ public:
 	virtual LPCTSTR GetWindowClassName() const override { return _T("DuiHidpiTestWnd"); }
 	virtual CDuiString GetSkinFile() override { return CDuiString(kSkinXml); }
 
-	// 对照实验开关：跳过基类 Create 末尾的 SetDPI(主屏 DPI)，
-	// 验证"创建期 SetDPI 是否破坏首次全量布局"。启动参数含 /nodpi 时生效。
+	// 对照实验开关：/nodpi 时跳过基类 Create 末尾的 SetDPI(主屏 DPI 兜底)，
+	// 验证"创建期 SetDPI 是否破坏首次全量布局"。正常路径已由 #23-④ opt-in
+	// 在 Init 阶段按所在屏设定,基类兜底自动让位(_tWinMain 按开关设好)。
 	virtual UIWND Create(UIWND hwndParent, LPCTSTR pstrName, DWORD dwStyle, DWORD dwExStyle, int x, int y, int cx, int cy) override
 	{
 		if (GetModuleHandle(NULL) && __argc > 1 && _tcsstr(__targv[1], _T("/nodpi")) != NULL) {
@@ -143,12 +144,15 @@ private:
 
 int APIENTRY _tWinMain(HINSTANCE, HINSTANCE, LPTSTR, int)
 {
-	// 进程级 DPI 感知必须先于首个窗口建立（KNOWN_ISSUES #23-④：库不代调，
-	// 宿主负责；漏调则整进程被 DWM 虚拟化，一切库内 DPI 机制空转）。
-	{
-		CPaintManagerWin32UI pm;
-		pm.GetDPIObj()->SetDPIAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-	}
+	bool bNoDpi = (GetModuleHandle(NULL) && __argc > 1 && _tcsstr(__targv[1], _T("/nodpi")) != NULL);
+
+	// #23-⑤ 新入口:进程级 Per-Monitor DPI 感知,替代旧的"临时 manager 调 SetDPIAwareness"绕法。
+	// 必须先于首个窗口建立(漏调则整进程被 DWM 虚拟化,一切库内 DPI 机制空转)。
+	CPaintManagerUI::EnablePerMonitorDPIAwareness();
+
+	// #23-④ opt-in:窗口初建即按所在显示器 DPI 初始化(替代基类 Create 末尾的主屏 DPI);
+	// /nodpi 对照实验保持旧行为——跳过库内一切创建期 DPI 干预
+	CPaintManagerUI::SetInitDPIFromMonitor(!bNoDpi);
 
 	CHidpiWindow wnd;
 	wnd.Create(NULL, _T("DuiLib HiDPI Test"),

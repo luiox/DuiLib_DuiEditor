@@ -109,13 +109,30 @@ namespace DuiLib {
 	{
 		ASSERT(::IsWindow(hWnd));
 		CPaintManagerUI::Init(hWnd, pstrName, pWindow);
-		if( m_hWndPaint != hWnd ) 
+		if( m_hWndPaint != hWnd )
 		{
 			m_hWndPaint = hWnd;
 			m_pWindow = pWindow;
 			m_hDcPaint = ::GetDC(hWnd);
 			m_aPreMessages.Add(this);
 			Render()->Init(this, m_hDcPaint);
+		}
+		// #23-④ opt-in:初始 DPI 按窗口所在显示器取值,并同步放大窗口物理尺寸。
+		// 时机关键——须在资源/控件解析与首次布局前生效,故挂在 Init 而非消息循环;
+		// 此刻字体/控件树尚未建立,只需 SetScale + 窗口尺寸放大,勿动 ResetDPIAssets。
+		if( m_bInitDPIFromMonitor && m_hWndPaint != NULL && (GetWindowStyle(m_hWndPaint) & WS_CHILD) == 0 ) {
+			RECT rcWnd = { 0 };
+			if( ::GetWindowRect(hWnd, &rcWnd) ) {
+				CDuiPoint ptCenter((rcWnd.left + rcWnd.right) / 2, (rcWnd.top + rcWnd.bottom) / 2);
+				int iDPI = GetDPIObj()->GetDPIOfMonitorNearestToPoint(ptCenter);
+				int iScaleNew = (iDPI > 0) ? (int)MulDiv(iDPI, 100, 96) : 0;
+				if( iScaleNew > 0 && iScaleNew != (int)GetDPIObj()->GetScale() ) {
+					GetDPIObj()->SetScale(iDPI);
+					CDuiRect rc(rcWnd.left, rcWnd.top, rcWnd.left + (rcWnd.right - rcWnd.left) * iScaleNew / 100,
+						rcWnd.top + (rcWnd.bottom - rcWnd.top) * iScaleNew / 100);
+					::SetWindowPos(hWnd, NULL, rc.left, rc.top, rc.GetWidth(), rc.GetHeight(), SWP_NOZORDER | SWP_NOACTIVATE);
+				}
+			}
 		}
 	}
 

@@ -176,16 +176,8 @@ LRESULT CUIFrameWndBase::MessageHandler(UINT uMsg, WPARAM wParam, LPARAM /*lPara
 
 LRESULT CUIFrameWndBase::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, uiBool& bHandled)
 {
-	//当你的窗口移动到DPI不同的显示器上时，会收到 WM_DPICHANGED 消息。
-	//直接修改当前显示设置改动dpi，不会收到此消息
-	if (uMsg == WM_DPICHANGED)
-	{
-		//wParam 的 HIWORD 包含窗口的新 dpi 的 Y 轴值。wParam 的 LOWORD 包含窗口的新 DPI 的 X 轴值。
-		//例如，96、120、144 或 192。对于 Windows 应用，X 轴和 Y 轴的值是相同的。
-		GetManager()->SetDPI(LOWORD(wParam));
-		GetManager()->ResetDPIAssets();
-		return 0;
-	}
+	//WM_DPICHANGED(跨屏 DPI 变化)已下沉到 CPaintManagerUI::MessageHandler 统一处理,
+	//采用 lParam 建议矩形(#23-②);此处不再拦截。宿主如需感知时序,处理 UIMSG_SET_DPI 即可。
 
 	if (uMsg == UIMSG_GRID_NOTIFY)
 	{

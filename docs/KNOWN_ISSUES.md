@@ -257,24 +257,39 @@
   （144 DPI 下 `GetDefaultFontInfo()->iSize == 12`，修复前为 18）；
   肉眼验证用 Demos/HiDPITest。
 
-### 23. DPI 初始化/响应链路仅覆盖 CFrameWnd 一族 [待修]
-- 位置：`DuiLib/Core/UIManager.cpp:952`（`GetDPIObj` 懒创建，默认
-  scale=96/100）、`DuiLib/Utils/UIFrameWndWin32.cpp:22`（初始 DPI 仅此处接
-  主屏）、`DuiLib/Utils/UIFrameWnd.cpp:181`（WM_DPICHANGED 仅
-  `CUIFrameWndBase::HandleCustomMessage` 接）。
-- 现象（代码层已核实）：
-  ① 不经 `CUIFrameWndWin32::Create` 的窗口（WindowImplBase、宿主自管
-    CWindowWnd + CPaintManagerUI）永远停在 100%——不缩放、不响应跨屏；
-  ② `WM_DPICHANGED` 未使用 lParam 的系统建议矩形（自算新位置在混合 DPI
-    多屏下可能与系统预期不一致）；
-  ③ `HandleCustomMessage` 里 `SetDPI` 后再调 `ResetDPIAssets()`（SetDPI
-    内部已调，重复无害，但说明链路认识不清）；
-  ④ 进程级 DPI 感知（`CDpiWin32::SetDPIAwareness`）无库内自动调用，宿主
-    漏调则整进程被 DWM 虚拟化，库内一切 DPI 机制空转（位图被系统拉伸）。
-  ⑤ `CDpiBase::ScaleIntBack(ScaleInt(x))` 在 scale>=100 时恒等（MulDiv
-    对称四舍五入，已加回归门 test_dpi_scale_roundtrip），但 scale<100
-    （降档）不成立（MulDiv(2,100,75)=3）——若引入 SDA 降档需先补
-    DUIThink MMDPI 式 ScaleVerify 往返校验。
+### 23. DPI 初始化/响应链路仅覆盖 CFrameWnd 一族 [已修 2026-09]
+- 位置：`DuiLib/Core/UIManager.cpp`（SetDPI 重载 / MessageHandler / 静态开关）、
+  `DuiLib/Core/UIManagerWin32.cpp`（Init）、`DuiLib/Utils/UIFrameWndWin32.cpp`
+  （Create）、`DuiLib/Utils/UIFrameWnd.cpp`（去重）。
+- 原状（代码层已核实）：初始 DPI 仅 `CUIFrameWndWin32::Create` 接主屏；
+  `WM_DPICHANGED` 仅 `CUIFrameWndBase::HandleCustomMessage` 接，且未用 lParam
+  建议矩形、SetDPI 后重复 `ResetDPIAssets()`；不经 FrameWnd 一族的窗口
+  （WindowImplBase、宿主自管 CWindowWnd + CPaintManagerUI）永停 100%——
+  不缩放、不响应跨屏；进程级 DPI 感知无库内入口，宿主漏调则整进程被 DWM
+  虚拟化，库内一切 DPI 机制空转（位图被系统拉伸）。
+- 修复（链路下沉到 manager 层，宿主零改动即获益）：
+  ① `CPaintManagerUI::SetDPI(int, const CDuiRect* pSuggestedRect)` 重载——
+    WM_DPICHANGED 采用 lParam 系统建议矩形（屏幕坐标），混合 DPI 多屏下比
+    自算比例可靠；最大化窗口仍忽略建议矩形（与原逻辑一致）。
+    原 `SetDPI(int)` 签名/行为不变，内部委托。
+  ② `CPaintManagerUI::MessageHandler` 新增 `case WM_DPICHANGED`——manager 层
+    统一接住跨屏 DPI 变化；`CUIFrameWndBase::HandleCustomMessage` 的重复分支
+    移除（含冗余 ResetDPIAssets）。系统感知/无感知进程收不到该消息，行为不变。
+  ③ opt-in 初始 DPI：`CPaintManagerUI::SetInitDPIFromMonitor(true)`（静态，
+    默认 false 保持既有宿主行为）后，`CPaintManagerWin32UI::Init` 按窗口中心
+    所在显示器取 DPI，SetScale 并同步放大窗口物理尺寸（宿主按 96 基准给的
+    创建尺寸 × 新倍率），全程先于资源/控件解析与首次布局——首个布局即
+    目标倍率，无创建期二次重排；开启期间 `CUIFrameWndWin32::Create` 不再
+    以主屏 DPI 覆盖。
+  ④ `CPaintManagerUI::EnablePerMonitorDPIAwareness()`——进程级 Per-Monitor
+    感知一站式入口（幂等，须在任何窗口创建前调用；失败=清单/先行调用已定，
+    以其为准）。非 Win32 平台恒返回 false。
+  ⑤ 遗留：`CDpiBase::ScaleIntBack(ScaleInt(x))` 仅 scale>=100 恒等
+    （MulDiv 对称四舍五入，test_dpi_scale_roundtrip 已盖）；scale<100 降档
+    不成立——若引入 SDA 降档需先补 DUIThink MMDPI 式 ScaleVerify 往返校验。
+- 回归门：test_setinitdpi_flag（opt-in 默认关 / 旧值语义）。
+- 宿主接入两行示例见 `Demos/HiDPITest/main.cpp`（EnablePerMonitorDPIAwareness +
+  SetInitDPIFromMonitor）；肉眼验证（含 /nodpi 对照）仍用该 demo。
 - 建议方向（逐项最小 diff）：初始 DPI 与 WM_DPICHANGED 下沉到
   manager/窗口基类层（按窗口所在 monitor 取 DPI，多 manager 各自缩放）；
   WM_DPICHANGED 采用建议矩形；文档/入口明确宿主必须先 SetDPIAwareness。
