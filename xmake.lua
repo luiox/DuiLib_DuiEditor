@@ -1,7 +1,8 @@
 -- DuiLib_DuiEditor 独立构建脚本（Windows / MSVC / GDI-GdiPlus 后端）
 --
 -- 说明：
--- * 本脚本只构建 DuiLib 核心库（Win32 后端），不含 DuiEditor / Demos / SDL 后端。
+-- * 本脚本只构建 DuiLib 核心库（Win32 后端），不含 DuiEditor / SDL 后端；
+--   Demos 侧仅接线 HiDPI 验证窗（duilib_hidpi，set_default(false)）。
 -- * Linux/macOS 的 SDL 后端构建走 DuiLib/CMakeLists.txt（上游维护）。
 -- * 静态库使用方需自行定义 UILIB_STATIC（见 UIlib.h）。
 -- * 排除项（remove_files）的完整清单、逐项理由与维护规则，
@@ -138,3 +139,6 @@ target("duilib_test")
     add_tests("default")
 target_end()
 end
+
+-- DPI 验收 Demo（binary，set_default(false)；仅 Win32 后端）
+includes("Demos/HiDPITest/xmake.lua")

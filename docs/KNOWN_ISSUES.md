@@ -222,3 +222,74 @@
     `compile_commands.json` 中无任何 atlmfc/atl 路径。
 - 本机临时规避（历史记录）：安装 ATL 组件；注意装完需删
   `%LOCALAPPDATA%\.xmake\cache\detect` 重新探测 vstudio 环境。
+
+## 高 DPI / 缩放
+
+> 2026-09 专项审计。对照参考：DuiLib_Ultimate `Demos/HiDPITest`、NIM
+> `DpiManager`、DUIThink `MMHelper/MMDPI`。验收工具：`Demos/HiDPITest`
+> （`xmake run duilib_hidpi`，运行时切 96~192 DPI + 跨屏拖动）。
+> 缩放模型备注：本库控件属性（fixedwidth/bordersize/padding/字号等）恒存
+> 96 DPI 逻辑值，getter / 构建时经 `CDpiBase::ScaleInt` 缩放（抽查
+> `UIControl.cpp` GetFixedWidth/GetBorderSize/GetPadding 与
+> `UIObject_gdi.cpp:90` 字体构建均符合），改动不得破坏该模型。
+
+### 22. XML `<Font default="true">` 默认字体被双重 DPI 缩放 [已修 2026-09]
+- 位置：`DuiLib/Core/UIDlgBuilder.cpp`（`<Font>` 节点 defaultfont 分支）。
+- 根因：builder 对 default 字体先 `GetDPIObj()->ScaleInt(size)` 再传
+  `SetDefaultFont`，而 `UIFont::CreateFont` 存原始值、`_buildFont` 构建时才
+  `ScaleInt`（`Render/UIObject_gdi.cpp:90` 等）→ 逻辑值位被存成已缩放值，
+  构建时再放大一次。同节点上一行 `AddFont(id, ...)` 传原始 size，两条路径
+  不一致；且 150% 下默认字体肉眼可见放大一档，跨档切 DPI 后字号持续错。
+- 修复：builder 侧去掉预缩放（最小 diff 一行），与 AddFont 路径对齐。
+- 回归门：`tests/test_main.cpp` `test_dpi_default_font_not_prescaled`
+  （144 DPI 下 `GetDefaultFontInfo()->iSize == 12`，修复前为 18）；
+  肉眼验证用 Demos/HiDPITest。
+
+### 23. DPI 初始化/响应链路仅覆盖 CFrameWnd 一族 [待修]
+- 位置：`DuiLib/Core/UIManager.cpp:952`（`GetDPIObj` 懒创建，默认
+  scale=96/100）、`DuiLib/Utils/UIFrameWndWin32.cpp:22`（初始 DPI 仅此处接
+  主屏）、`DuiLib/Utils/UIFrameWnd.cpp:181`（WM_DPICHANGED 仅
+  `CUIFrameWndBase::HandleCustomMessage` 接）。
+- 现象（代码层已核实）：
+  ① 不经 `CUIFrameWndWin32::Create` 的窗口（WindowImplBase、宿主自管
+    CWindowWnd + CPaintManagerUI）永远停在 100%——不缩放、不响应跨屏；
+  ② `WM_DPICHANGED` 未使用 lParam 的系统建议矩形（自算新位置在混合 DPI
+    多屏下可能与系统预期不一致）；
+  ③ `HandleCustomMessage` 里 `SetDPI` 后再调 `ResetDPIAssets()`（SetDPI
+    内部已调，重复无害，但说明链路认识不清）；
+  ④ 进程级 DPI 感知（`CDpiWin32::SetDPIAwareness`）无库内自动调用，宿主
+    漏调则整进程被 DWM 虚拟化，库内一切 DPI 机制空转（位图被系统拉伸）。
+  ⑤ `CDpiBase::ScaleIntBack(ScaleInt(x))` 在 scale>=100 时恒等（MulDiv
+    对称四舍五入，已加回归门 test_dpi_scale_roundtrip），但 scale<100
+    （降档）不成立（MulDiv(2,100,75)=3）——若引入 SDA 降档需先补
+    DUIThink MMDPI 式 ScaleVerify 往返校验。
+- 建议方向（逐项最小 diff）：初始 DPI 与 WM_DPICHANGED 下沉到
+  manager/窗口基类层（按窗口所在 monitor 取 DPI，多 manager 各自缩放）；
+  WM_DPICHANGED 采用建议矩形；文档/入口明确宿主必须先 SetDPIAwareness。
+- 借鉴：DUIThink `DUIWnd.cpp` 的 SetDpi→控件树 OnDpiChanged 虚链 +
+  DpiChanged 通知；Ultimate HiDPITest 按窗口处理。
+
+### 24. 多分辨率图片机制存在但受限，无矢量渲染 [待改进]
+- 位置：`DuiLib/Render/IRender.cpp` `tagTDrawInfo` 构造（"调整DPI资源"块）。
+- 现状：scale≠100 时按 `name@150.ext` 命名探测（`CUIFile::LoadFile` 试探），
+  命中则连 `source/corner` 一起缩放（与 Ultimate 同款约定）。
+- 限制：
+  ① `CDuiString::Replace(_T("."), sScale)` 替换**所有**点，多点文件名
+    （`icon.v2.png` → `icon@150.v2@150.png`）永远探测失败，静默回退位图
+    拉伸；
+  ② 未命中即拉伸原始位图，放大发糊（无分档缓存）；
+  ③ 3rd/ 已有 nanosvg，但 SVG 未按 scale 实时矢量出图，切 DPI 依赖
+    `ResetDPIAssets` 清缓存后按位图路径重载。
+- 建议：Replace 限首个点；SVG 路径按 `GetScale()` 矢量渲染（参考 DUIThink
+  `DUIImageBase` 的 `m_mapDpiImageInfo[scale]` 分档缓存，SVG 不缓存直接
+  渲染）；位图维持 `@N` 约定即可。
+
+### 25. 弹出窗口 DPI 传递无内部链路 [待修/待实测]
+- 位置：`DuiLib/Control/UIMenuWndWin32.cpp` / `UIMenuWndSdl.cpp` 的
+  `setDPI(int)`（库内无调用方）；`UIComboWndWin32` / `UIDateTimeWndWin32`
+  连 DPI 入口都没有（已核实无 setDPI 定义）。
+- 现象：弹窗各自新建 manager，`GetDPIObj` 懒创建默认 100%；宿主不手动调
+  `setDPI`，则 >100% 主屏上菜单按 96 DPI 布局，与主窗不匹配。
+- 建议：弹窗 Init 时从所属 manager 或
+  `GetDPIOfMonitorNearestToPoint`（弹锚点）取 DPI 同步，一处最小 diff。
+- 待实测：HiDPITest 验证窗内开菜单确认症状后收口。
